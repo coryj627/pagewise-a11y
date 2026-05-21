@@ -10,3 +10,77 @@ body {
   padding: 2rem;
   max-width: 48rem;
 }
+
+h1 {
+  margin-top: 0;
+}
+
+[role='status'] {
+  margin: 1rem 0;
+}
+[role='status'][data-empty='true'] {
+  display: none;
+}
+[role='status'][data-tone='error'] {
+  color: #b00020;
+}
+[role='status'][data-tone='ok'] {
+  color: #006a3d;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 1rem 0;
+}
+.help {
+  font-size: 0.875rem;
+  margin: 0;
+  opacity: 0.85;
+}
+
+#add-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: flex-start;
+}
+
+button {
+  font: inherit;
+  padding: 0.4rem 0.9rem;
+  border-radius: 0.25rem;
+  border: 1px solid currentColor;
+  background: transparent;
+  cursor: pointer;
+}
+
+#confirm-region {
+  border: 2px solid currentColor;
+  border-radius: 0.5rem;
+  padding: 1rem;
+  margin: 1rem 0;
+}
+#confirm-region .actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+#domains-list {
+  list-style: none;
+  padding: 0;
+}
+#domains-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid color-mix(in srgb, currentColor 15%, transparent);
+}
+#domains-list li.empty {
+  border: none;
+  opacity: 0.7;
+  font-style: italic;
+}

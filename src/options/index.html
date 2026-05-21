@@ -7,8 +7,58 @@
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <h1>Pagewise options</h1>
-    <p>API key entry, domain allowlist, and cost ledger land in Phase 1.</p>
+    <main>
+      <h1>Pagewise options</h1>
+
+      <section aria-labelledby="domains-heading">
+        <h2 id="domains-heading">Enabled domains</h2>
+        <p>
+          Pagewise is inert on every web page until you enable it for that
+          domain. Once enabled, Pagewise can extract page structure on that
+          domain when you open the side panel. The page is sent to Anthropic
+          only when you explicitly request an AI-enriched view.
+        </p>
+
+        <div
+          role="status"
+          aria-live="polite"
+          id="status-region"
+          data-empty="true"
+        ></div>
+
+        <form id="add-form" novalidate>
+          <div class="field">
+            <label for="add-input">Add a domain</label>
+            <input
+              id="add-input"
+              name="domain"
+              type="text"
+              autocomplete="off"
+              spellcheck="false"
+              placeholder="example.com"
+              aria-describedby="add-help"
+            />
+            <p id="add-help" class="help">
+              Enter a hostname like <code>example.com</code>. You can paste a
+              full URL — Pagewise will use just the domain.
+            </p>
+          </div>
+          <button type="submit">Enable</button>
+        </form>
+
+        <div
+          id="confirm-region"
+          role="region"
+          aria-labelledby="confirm-heading"
+          hidden
+        ></div>
+
+        <h3 id="list-heading">Currently enabled</h3>
+        <ul id="domains-list" aria-labelledby="list-heading">
+          <li class="empty">No domains enabled.</li>
+        </ul>
+      </section>
+    </main>
     <script type="module" src="./main.ts"></script>
   </body>
 </html>
