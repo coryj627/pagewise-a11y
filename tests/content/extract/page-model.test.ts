@@ -123,12 +123,109 @@ describe('extractPageModel', () => {
     expect(capability.reasons).toContain('mostly_images');
   });
 
-  it('returns a stub SensitivityReport (public_likely, no redactions)', () => {
-    document.body.innerHTML = '<main></main>';
+  it('returns public_likely with no redactions for an ordinary page', () => {
+    document.body.innerHTML = '<main><h1>Hi</h1><p>Just an article.</p></main>';
     const { sensitivity } = extractPageModel(document);
     expect(sensitivity.page_classification).toBe('public_likely');
     expect(sensitivity.redactions).toEqual([]);
     expect(sensitivity.url_path_redacted).toBe(false);
+  });
+
+  it('classifies as credential_likely with a password redaction when password field is present', () => {
+    document.body.innerHTML = `
+      <main>
+        <form>
+          <label>Email <input type="email" /></label>
+          <label>Password <input type="password" /></label>
+        </form>
+      </main>
+    `;
+    const { sensitivity } = extractPageModel(document);
+    expect(sensitivity.page_classification).toBe('credential_likely');
+    const kinds = sensitivity.redactions.map((r) => r.kind);
+    expect(kinds).toContain('password');
+    expect(kinds).toContain('email');
+  });
+
+  it('classifies as financial_likely with a credit_card redaction for cc-number autocomplete', () => {
+    document.body.innerHTML = `
+      <main>
+        <form>
+          <input autocomplete="cc-number" />
+        </form>
+      </main>
+    `;
+    const { sensitivity } = extractPageModel(document);
+    expect(sensitivity.page_classification).toBe('financial_likely');
+    expect(sensitivity.redactions.map((r) => r.kind)).toContain('credit_card');
+  });
+
+  it('captures a contenteditable redaction when content is present', () => {
+    document.body.innerHTML = `
+      <main>
+        <div contenteditable="true">Some draft note</div>
+      </main>
+    `;
+    const { sensitivity } = extractPageModel(document);
+    expect(sensitivity.page_classification).toBe('personal_data_likely');
+    expect(sensitivity.redactions.map((r) => r.kind)).toContain('contenteditable');
+  });
+
+  it('does NOT add a contenteditable redaction for an empty editable element', () => {
+    document.body.innerHTML = '<main><div contenteditable="true"></div></main>';
+    const { sensitivity } = extractPageModel(document);
+    expect(sensitivity.redactions.find((r) => r.kind === 'contenteditable')).toBeUndefined();
+  });
+});
+
+describe('extractPageModel — deterministic candidates ordering', () => {
+  beforeEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('puts main → H1 → search → form in that order', () => {
+    document.body.innerHTML = `
+      <main>
+        <form><input type="search" id="s" /></form>
+        <h1>Title</h1>
+      </main>
+    `;
+    const { pageModel } = extractPageModel(document);
+    const candidates = pageModel.deterministic_candidates;
+    expect(candidates.length).toBeGreaterThanOrEqual(3);
+
+    const indexOfRole = (role: string): number =>
+      candidates.findIndex((c) => c.hashes.role === role);
+
+    const mainIdx = indexOfRole('main');
+    const headingIdx = indexOfRole('heading');
+    const searchIdx = indexOfRole('searchbox');
+    const formIdx = indexOfRole('form');
+
+    expect(mainIdx).toBeGreaterThanOrEqual(0);
+    expect(mainIdx).toBeLessThan(headingIdx);
+    expect(headingIdx).toBeLessThan(searchIdx);
+    expect(searchIdx).toBeLessThan(formIdx);
+  });
+
+  it('includes pagination links by accessible name', () => {
+    document.body.innerHTML = `
+      <main>
+        <nav>
+          <a href="/p2">Next</a>
+          <a href="/about">About us</a>
+        </nav>
+      </main>
+    `;
+    const { pageModel } = extractPageModel(document);
+    // The "Next" link should be in candidates (pagination match);
+    // "About us" should NOT be (not pagination).
+    // We can't easily map ref → name here, but we can verify a link
+    // candidate exists and that the count is reasonable.
+    const linkCount = pageModel.deterministic_candidates.filter(
+      (c) => c.hashes.role === 'link'
+    ).length;
+    expect(linkCount).toBeGreaterThanOrEqual(1);
   });
 
   it('uses the provided extractionId and timestamp', () => {

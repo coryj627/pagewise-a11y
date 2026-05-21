@@ -1,12 +1,21 @@
 import type { PageElement } from '@/schemas/page-element';
 import type { PageModel, PageState } from '@/schemas/page-model';
-import type { NodeRef } from '@/schemas/node-ref';
 import type { PageCapabilityReport } from '@/schemas/capability-report';
-import type { SensitivityReport } from '@/schemas/sensitivity-report';
+import type {
+  SensitivityReport,
+  Redaction,
+} from '@/schemas/sensitivity-report';
 import { extractTree } from './walker';
 import { RefRegistry } from '../refs/registry';
 import { hashPageElementTree } from '@/shared/content-hash';
 import { redactUrlPath } from '@/shared/url-shape';
+import {
+  detectElementSensitivity,
+  classifyPage,
+  buildRedaction,
+  buildSensitiveDomainRedaction,
+} from './sensitivity';
+import { pickDeterministicCandidates } from './pre-rank';
 
 const LANDMARK_ROLES = new Set([
   'banner',
@@ -34,14 +43,10 @@ export interface ExtractPageModelResult {
 
 /**
  * End-to-end PageModel construction from a live document. Wraps the
- * walker, picks out landmarks / main content / interaction surface,
- * builds a deterministic candidate list, computes a stable content hash,
- * and returns the side-by-side capability and sensitivity reports the
- * side panel consumes.
- *
- * Sensitivity detection is a Phase-0 stub (`public_likely`, no
- * redactions). Real detection lands in extract/sensitivity.ts in a
- * follow-up milestone.
+ * walker, picks landmarks / main content / interaction surface, builds
+ * the deterministic candidate list (see pre-rank.ts), computes a stable
+ * content hash, and runs the per-element sensitivity check (see
+ * sensitivity.ts) to produce a real SensitivityReport.
  */
 export function extractPageModel(
   doc: Document,
@@ -82,12 +87,22 @@ export function extractPageModel(
   const win = doc.defaultView ?? globalThis.window ?? null;
   const url = win?.location ?? doc.location;
   const lang = doc.documentElement.getAttribute('lang') ?? undefined;
+  const urlPathShape = redactUrlPath(url.pathname);
+  const urlPathRedacted = urlPathShape !== url.pathname;
+
+  const sensitivity = buildSensitivityReport({
+    registry,
+    refsById: buildRefIndex(root),
+    rootRef: root.ref,
+    host: url.hostname,
+    urlPathRedacted,
+  });
 
   const pageModel: PageModel = {
     schema_version: 2,
     extraction_id: extractionId,
     url_origin: url.origin,
-    url_path_shape: redactUrlPath(url.pathname),
+    url_path_shape: urlPathShape,
     title: (doc.title ?? '').trim(),
     ...(lang !== undefined ? { lang } : {}),
     extracted_at: now.toISOString(),
@@ -107,7 +122,7 @@ export function extractPageModel(
     pageModel,
     registry,
     capability: buildCapabilityReport(all, root),
-    sensitivity: stubSensitivityReport(),
+    sensitivity,
   };
 }
 
@@ -118,8 +133,6 @@ function flatten(el: PageElement, out: PageElement[] = []): PageElement[] {
 }
 
 function pickPrimaryButtons(all: PageElement[]): PageElement[] {
-  // Phase 0 heuristic: include named buttons and submit-shaped inputs; cap
-  // at the first 5 to avoid noise from page chrome.
   const buttons = all.filter(
     (el) =>
       (el.role === 'button' || el.role === 'link') &&
@@ -127,38 +140,6 @@ function pickPrimaryButtons(all: PageElement[]): PageElement[] {
       el.name.length > 0
   );
   return buttons.slice(0, 5);
-}
-
-function pickDeterministicCandidates(args: {
-  root: PageElement;
-  main: PageElement;
-  landmarks: PageElement[];
-  forms: PageElement[];
-  searchInputs: PageElement[];
-  primaryButtons: PageElement[];
-  all: PageElement[];
-}): NodeRef[] {
-  const out: NodeRef[] = [];
-  const seen = new Set<string>();
-  const push = (el: PageElement | undefined): void => {
-    if (el === undefined) return;
-    if (seen.has(el.ref.id)) return;
-    seen.add(el.ref.id);
-    out.push(el.ref);
-  };
-
-  // Main + first heading inside main are the highest-value targets.
-  if (args.main !== args.root) push(args.main);
-  const firstHeading = args.all.find((el) => el.role === 'heading');
-  push(firstHeading);
-  // Each landmark gets a candidate (skip duplicates of main).
-  for (const lm of args.landmarks) push(lm);
-  // Interaction surface.
-  for (const f of args.forms) push(f);
-  for (const s of args.searchInputs) push(s);
-  for (const b of args.primaryButtons) push(b);
-
-  return out;
 }
 
 function inferPageState(all: PageElement[]): PageState {
@@ -181,9 +162,16 @@ function buildCapabilityReport(
     links: all.filter((el) => el.role === 'link').length,
     buttons: all.filter((el) => el.role === 'button').length,
     form_controls: all.filter((el) =>
-      ['textbox', 'checkbox', 'radio', 'combobox', 'listbox', 'slider', 'spinbutton', 'searchbox'].includes(
-        el.role
-      )
+      [
+        'textbox',
+        'checkbox',
+        'radio',
+        'combobox',
+        'listbox',
+        'slider',
+        'spinbutton',
+        'searchbox',
+      ].includes(el.role)
     ).length,
     images_without_alt: all.filter(
       (el) =>
@@ -219,10 +207,42 @@ function buildCapabilityReport(
   };
 }
 
-function stubSensitivityReport(): SensitivityReport {
+function buildRefIndex(root: PageElement): Map<string, Redaction['ref']> {
+  const out = new Map<string, Redaction['ref']>();
+  const visit = (el: PageElement): void => {
+    out.set(el.ref.id, el.ref);
+    for (const c of el.children) visit(c);
+  };
+  visit(root);
+  return out;
+}
+
+function buildSensitivityReport(args: {
+  registry: RefRegistry;
+  refsById: ReadonlyMap<string, Redaction['ref']>;
+  rootRef: Redaction['ref'];
+  host: string;
+  urlPathRedacted: boolean;
+}): SensitivityReport {
+  const redactions: Redaction[] = [];
+
+  for (const [refId, element] of args.registry.entries()) {
+    const hit = detectElementSensitivity(element);
+    if (hit === null) continue;
+    const ref = args.refsById.get(refId);
+    if (ref === undefined) continue; // registry/tree mismatch shouldn't happen
+    redactions.push(buildRedaction(ref, hit));
+  }
+
+  const domainRedaction = buildSensitiveDomainRedaction(args.rootRef, args.host);
+  if (domainRedaction !== null) redactions.push(domainRedaction);
+
   return {
-    page_classification: 'public_likely',
-    redactions: [],
-    url_path_redacted: false,
+    page_classification: classifyPage({
+      hits: redactions.map(({ kind }) => ({ kind })),
+      host: args.host,
+    }),
+    redactions,
+    url_path_redacted: args.urlPathRedacted,
   };
 }
