@@ -1,10 +1,12 @@
 import { configureStorageAccessLevel } from './access-level';
 import { wirePermissions } from './permissions';
+import { installRouter } from './router';
 
 // Subscriptions must be attached at the top level so they re-register
 // every time the service worker wakes up — MV3 terminates idle workers
 // and re-runs this module on the next event.
 const domainStore = wirePermissions();
+installRouter();
 
 chrome.runtime.onInstalled.addListener(() => {
   void configureStorageAccessLevel();

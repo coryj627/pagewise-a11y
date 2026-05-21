@@ -9,13 +9,31 @@
   <body>
     <header>
       <h1>Pagewise</h1>
-      <div role="status" aria-live="polite" id="status"></div>
+      <div role="status" aria-live="polite" id="status-region" data-empty="true"></div>
     </header>
     <main id="panel-main">
-      <p>Side panel scaffold. Mode selector and result rendering land in Phase 1.</p>
+      <p id="empty-state">
+        Press <strong>Get orientation</strong> to scan the current tab.
+        Pagewise will list the page's headings, landmarks, forms, and
+        primary actions, with jump buttons that move screen-reader focus
+        to the host page.
+      </p>
+      <button id="extract-btn" type="button">Get orientation</button>
+
+      <section id="result" hidden aria-labelledby="result-heading">
+        <h2 id="result-heading" tabindex="-1">Page orientation</h2>
+
+        <dl id="page-meta"></dl>
+
+        <h3>Counts</h3>
+        <dl id="page-counts"></dl>
+
+        <h3>Jump to</h3>
+        <ul id="jump-list" aria-label="Jump targets"></ul>
+      </section>
     </main>
     <footer>
-      <p>Phase 0 scaffold</p>
+      <p>Phase 0 — deterministic only. AI Orientation comes next.</p>
     </footer>
     <script type="module" src="./main.ts"></script>
   </body>
