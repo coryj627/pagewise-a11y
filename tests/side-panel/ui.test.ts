@@ -472,6 +472,122 @@ describe('side panel UI', () => {
     expect(status.getAttribute('data-tone')).toBe('error');
   });
 
+  it('surfaces a Retry button after a rate_limited error', async () => {
+    runAiOrientation = vi.fn(async () => ({
+      kind: 'rate_limited',
+      message: 'Slow down',
+    }));
+    mountWithServices();
+    (document.getElementById('run-btn') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    (document.getElementById('run-ai-btn') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    const retry = document.getElementById('retry-actions')!;
+    expect(retry.hasAttribute('hidden')).toBe(false);
+    const button = retry.querySelector<HTMLButtonElement>('button')!;
+    expect(button.textContent).toBe('Retry');
+    expect(button.disabled).toBe(false);
+  });
+
+  it('disables the Retry button with a countdown when retryAfterSec is set', async () => {
+    runAiOrientation = vi.fn(async () => ({
+      kind: 'rate_limited',
+      retryAfterSec: 30,
+      message: 'Slow down',
+    }));
+    mountWithServices();
+    (document.getElementById('run-btn') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    (document.getElementById('run-ai-btn') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    const button = document
+      .getElementById('retry-actions')!
+      .querySelector<HTMLButtonElement>('button')!;
+    expect(button.disabled).toBe(true);
+    expect(button.textContent).toContain('30');
+  });
+
+  it('clicking Retry triggers another AI call', async () => {
+    runAiOrientation = vi
+      .fn<
+        (input: AiOrientationServiceInput) => Promise<AiOrientationServiceResult>
+      >()
+      .mockResolvedValueOnce({ kind: 'network_error', message: 'offline' })
+      .mockResolvedValueOnce({
+        kind: 'ok',
+        value: makeAiModel('n_00000'),
+        dropped_refs: 0,
+        usage: null,
+      });
+    mountWithServices();
+    (document.getElementById('run-btn') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    (document.getElementById('run-ai-btn') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    expect(runAiOrientation).toHaveBeenCalledTimes(1);
+    const retryButton = document
+      .getElementById('retry-actions')!
+      .querySelector<HTMLButtonElement>('button')!;
+    retryButton.click();
+    await flushMicrotasks();
+
+    expect(runAiOrientation).toHaveBeenCalledTimes(2);
+    expect(document.getElementById('ai-result')?.hasAttribute('hidden')).toBe(false);
+    expect(document.getElementById('retry-actions')?.hasAttribute('hidden')).toBe(true);
+  });
+
+  it('clears the Retry button when a fresh extract runs', async () => {
+    runAiOrientation = vi.fn(async () => ({
+      kind: 'network_error',
+      message: 'offline',
+    }));
+    mountWithServices();
+    (document.getElementById('run-btn') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    (document.getElementById('run-ai-btn') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    expect(
+      document.getElementById('retry-actions')?.hasAttribute('hidden')
+    ).toBe(false);
+
+    (document.getElementById('run-btn') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    expect(
+      document.getElementById('retry-actions')?.hasAttribute('hidden')
+    ).toBe(true);
+  });
+
+  it('does NOT surface Retry on auth_failed (user must fix the key, not retry)', async () => {
+    runAiOrientation = vi.fn(async () => ({
+      kind: 'auth_failed',
+      message: 'Invalid API key',
+    }));
+    mountWithServices();
+    (document.getElementById('run-btn') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    (document.getElementById('run-ai-btn') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    expect(
+      document.getElementById('retry-actions')?.hasAttribute('hidden')
+    ).toBe(true);
+  });
+
+  it('does NOT surface Retry on no_api_key', async () => {
+    runAiOrientation = vi.fn(async () => ({ kind: 'no_api_key' }));
+    mountWithServices();
+    (document.getElementById('run-btn') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    (document.getElementById('run-ai-btn') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    expect(
+      document.getElementById('retry-actions')?.hasAttribute('hidden')
+    ).toBe(true);
+  });
+
   it('shows the cost disclosure prompt when shouldPrompt returns true', async () => {
     shouldPrompt = vi.fn(async () => true);
     estimateCall = vi.fn(async () => ({ tokens: 18400, cost_usd: 0.06 }));

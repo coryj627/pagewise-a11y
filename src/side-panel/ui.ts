@@ -77,6 +77,7 @@ export function mountSidePanelUi(
   const pageCounts = $('#page-counts');
   const jumpList = $('#jump-list');
   const confirm = $('#confirm-region');
+  const retryActions = $('#retry-actions');
   const aiResult = $('#ai-result');
   const aiResultHeading = $('#ai-result-heading');
   const aiSummary = $('#ai-summary');
@@ -205,6 +206,7 @@ export function mountSidePanelUi(
       state.lastExtract = response;
       state.boundTabId = tabId;
       clearStale();
+      clearRetry();
       announce('Extraction ready.', 'ok');
       renderDeterministicResult(response);
     } finally {
@@ -380,6 +382,7 @@ export function mountSidePanelUi(
 
   const runAiCall = async (): Promise<void> => {
     if (state.lastExtract === null) return;
+    clearRetry();
     announce('Asking Claude…', 'info');
     aiExtractBtn.disabled = true;
     try {
@@ -411,12 +414,14 @@ export function mountSidePanelUi(
             `Claude returned no tool call: ${result.message}`,
             'error'
           );
+          renderRetry();
           break;
         case 'validation_failed':
           announce(
             'Claude returned a malformed response. Try again.',
             'error'
           );
+          renderRetry();
           break;
         case 'rate_limited':
           announce(
@@ -425,6 +430,7 @@ export function mountSidePanelUi(
               : 'Rate limited. Try again shortly.',
             'error'
           );
+          renderRetry(result.retryAfterSec);
           break;
         case 'auth_failed':
           announce(
@@ -434,18 +440,71 @@ export function mountSidePanelUi(
           break;
         case 'network_error':
           announce(`Network error: ${result.message}`, 'error');
+          renderRetry();
           break;
         case 'api_error':
           announce(
             `API error${result.status !== undefined ? ` (${result.status})` : ''}: ${result.message}`,
             'error'
           );
+          renderRetry();
           break;
       }
     } finally {
       aiExtractBtn.disabled = false;
     }
   };
+
+  /**
+   * Show a Retry button next to the live region after a recoverable AI
+   * error. Clicking it re-runs runAiCall directly (skipping sensitivity
+   * + disclosure gates — the user just confirmed those). When a cooldown
+   * is supplied (rate_limited with retryAfterSec), the button is disabled
+   * for that many seconds with a "Retry in Ns" label that ticks down.
+   */
+  let activeRetryTimer: ReturnType<typeof setInterval> | null = null;
+
+  function renderRetry(cooldownSec?: number): void {
+    if (activeRetryTimer !== null) {
+      clearInterval(activeRetryTimer);
+      activeRetryTimer = null;
+    }
+    retryActions.replaceChildren();
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = 'Retry';
+    button.addEventListener('click', () => {
+      void runAiCall();
+    });
+    retryActions.append(button);
+    retryActions.removeAttribute('hidden');
+
+    if (cooldownSec !== undefined && cooldownSec > 0) {
+      let remaining = cooldownSec;
+      button.disabled = true;
+      button.textContent = `Retry in ${remaining}s`;
+      activeRetryTimer = setInterval(() => {
+        remaining -= 1;
+        if (remaining <= 0) {
+          button.disabled = false;
+          button.textContent = 'Retry';
+          if (activeRetryTimer !== null) clearInterval(activeRetryTimer);
+          activeRetryTimer = null;
+        } else {
+          button.textContent = `Retry in ${remaining}s`;
+        }
+      }, 1000);
+    }
+  }
+
+  function clearRetry(): void {
+    if (activeRetryTimer !== null) {
+      clearInterval(activeRetryTimer);
+      activeRetryTimer = null;
+    }
+    retryActions.replaceChildren();
+    retryActions.setAttribute('hidden', '');
+  }
 
   const renderAiResult = (model: OrientationModel, droppedRefs: number): void => {
     aiResult.removeAttribute('hidden');
