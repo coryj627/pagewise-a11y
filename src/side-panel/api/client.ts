@@ -8,6 +8,10 @@ import type { SensitivityReport } from '@/schemas/sensitivity-report';
 import type { NodeRef } from '@/schemas/node-ref';
 import { validateToolOutput } from '@/schemas/validate';
 import { ORIENTATION_SYSTEM_PROMPT } from '@/system-prompts';
+import {
+  truncatePageModel,
+  DEFAULT_PAGEMODEL_TOKEN_BUDGET,
+} from '@/shared/truncate';
 
 /**
  * Default model for Phase 1 per architecture.md §8. Sonnet 4.6's structured
@@ -79,6 +83,14 @@ export type OrientationCallInput = {
   resolveRef: RefResolver;
   /** Optional model override. */
   model?: string;
+  /**
+   * Override the per-call PageModel token budget. Defaults to
+   * {@link DEFAULT_PAGEMODEL_TOKEN_BUDGET}. When the serialized
+   * PageModel exceeds the budget, {@link truncatePageModel} prunes
+   * main_content depth until it fits and surfaces large_page_truncated
+   * in the capability report sent to the model.
+   */
+  pageModelTokenBudget?: number;
 };
 
 export type OrientationCallResult =
@@ -101,7 +113,16 @@ export class AnthropicSidePanelClient {
   async callOrientation(
     input: OrientationCallInput
   ): Promise<OrientationCallResult> {
-    const params = buildOrientationParams(input);
+    const trimmed = truncatePageModel(
+      input.pageModel,
+      input.capability,
+      input.pageModelTokenBudget ?? DEFAULT_PAGEMODEL_TOKEN_BUDGET
+    );
+    const params = buildOrientationParams({
+      ...input,
+      pageModel: trimmed.pageModel,
+      capability: trimmed.capability,
+    });
 
     let response: AnthropicResponse;
     try {

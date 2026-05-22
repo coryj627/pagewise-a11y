@@ -290,4 +290,53 @@ describe('AnthropicSidePanelClient.callOrientation', () => {
     void new AnthropicSidePanelClient(api);
     expect(create).not.toHaveBeenCalled();
   });
+
+  it('truncates oversized PageModels before sending; flags large_page_truncated', async () => {
+    // Build a PageModel with a huge inline text payload that blows past
+    // a tiny per-call budget.
+    const bigPage = makePageModel();
+    const huge = 'x'.repeat(50_000);
+    bigPage.main_content = {
+      ref: makeRef('n_huge'),
+      tag: 'main',
+      role: 'main',
+      role_source: 'native',
+      text: huge,
+      children: [],
+    };
+
+    let capturedUserMessage = '';
+    const api = mockMessagesApi((params) => {
+      const messages = (params as { messages: Array<{ content: Array<{ text: string }> }> })
+        .messages;
+      capturedUserMessage = messages[0]?.content
+        .map((c) => c.text)
+        .join('\n') ?? '';
+      return {
+        content: [
+          {
+            type: 'tool_use',
+            id: 't_1',
+            name: 'summarize_page',
+            input: VALID_ORIENTATION_TOOL_INPUT,
+          },
+        ],
+      };
+    });
+    const client = new AnthropicSidePanelClient(api);
+    const result = await client.callOrientation({
+      pageModel: bigPage,
+      capability: CAPABILITY,
+      sensitivity: SENSITIVITY,
+      resolveRef: () => null,
+      pageModelTokenBudget: 200,
+    });
+
+    expect(result.kind).toBe('ok');
+    // The serialized user message should reflect the truncation:
+    // capability.reasons gained large_page_truncated and the huge text
+    // payload is gone or substantially reduced.
+    expect(capturedUserMessage).toContain('large_page_truncated');
+    expect(capturedUserMessage.length).toBeLessThan(huge.length);
+  });
 });
