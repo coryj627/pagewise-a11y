@@ -18,7 +18,19 @@
         primary actions, with jump buttons that move screen-reader focus
         to the host page.
       </p>
-      <button id="extract-btn" type="button">Get orientation</button>
+      <div class="primary-actions">
+        <button id="extract-btn" type="button">Get orientation</button>
+        <button id="ai-extract-btn" type="button" disabled>
+          Get AI orientation
+        </button>
+      </div>
+
+      <div
+        id="confirm-region"
+        role="region"
+        aria-labelledby="confirm-heading"
+        hidden
+      ></div>
 
       <section id="result" hidden aria-labelledby="result-heading">
         <h2 id="result-heading" tabindex="-1">Page orientation</h2>
@@ -31,9 +43,31 @@
         <h3>Jump to</h3>
         <ul id="jump-list" aria-label="Jump targets"></ul>
       </section>
+
+      <section
+        id="ai-result"
+        hidden
+        aria-labelledby="ai-result-heading"
+      >
+        <h2 id="ai-result-heading" tabindex="-1">AI orientation</h2>
+        <p id="ai-summary"></p>
+        <dl id="ai-meta"></dl>
+        <h3 id="ai-facts-heading">Key facts</h3>
+        <ul id="ai-facts" aria-labelledby="ai-facts-heading"></ul>
+        <h3 id="ai-jumps-heading">Ranked jump targets</h3>
+        <ul id="ai-jumps" aria-labelledby="ai-jumps-heading"></ul>
+        <section
+          id="ai-warnings-section"
+          aria-labelledby="ai-warnings-heading"
+          hidden
+        >
+          <h3 id="ai-warnings-heading">Warnings</h3>
+          <ul id="ai-warnings"></ul>
+        </section>
+      </section>
     </main>
     <footer>
-      <p>Phase 0 — deterministic only. AI Orientation comes next.</p>
+      <p>Phase 0 — AI Orientation is the only mode wired so far.</p>
     </footer>
     <script type="module" src="./main.ts"></script>
   </body>

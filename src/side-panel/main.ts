@@ -1,4 +1,9 @@
-import { mountSidePanelUi, type SidePanelServices } from './ui';
+import {
+  mountSidePanelUi,
+  type SidePanelServices,
+  type AiOrientationServiceInput,
+  type AiOrientationServiceResult,
+} from './ui';
 import type { NodeRef } from '@/schemas/node-ref';
 import {
   ExtractResponseSchema,
@@ -6,6 +11,56 @@ import {
   type ExtractResponse,
   type JumpResponse,
 } from '@/shared/messages-rpc';
+import { ChromeStorageBackend } from '@/shared/storage';
+import { ApiKeyStore } from '@/shared/api-key';
+import { CostLedger } from '@/shared/cost-ledger';
+import {
+  createAnthropicClient,
+  DEFAULT_MODEL,
+} from './api/client';
+import { estimateCost, pricingForModel } from '@/shared/pricing';
+
+const storage = new ChromeStorageBackend(chrome.storage.local);
+const apiKey = new ApiKeyStore(storage);
+const ledger = new CostLedger(storage);
+
+async function runAiOrientation(
+  input: AiOrientationServiceInput
+): Promise<AiOrientationServiceResult> {
+  const key = await apiKey.get();
+  if (key === null) return { kind: 'no_api_key' };
+
+  const client = createAnthropicClient(key);
+  const result = await client.callOrientation({
+    pageModel: input.pageModel,
+    capability: input.capability,
+    sensitivity: input.sensitivity,
+    resolveRef: input.refResolver,
+  });
+
+  if (result.kind === 'ok' && result.usage !== null) {
+    const pricing = pricingForModel(DEFAULT_MODEL);
+    const cost = estimateCost(result.usage, pricing);
+    await ledger
+      .record({
+        model: DEFAULT_MODEL,
+        input_tokens: result.usage.input_tokens,
+        output_tokens: result.usage.output_tokens,
+        ...(result.usage.cache_creation_input_tokens !== undefined
+          ? { cache_creation_input_tokens: result.usage.cache_creation_input_tokens }
+          : {}),
+        ...(result.usage.cache_read_input_tokens !== undefined
+          ? { cache_read_input_tokens: result.usage.cache_read_input_tokens }
+          : {}),
+        cost_usd: cost,
+      })
+      .catch((error: unknown) => {
+        console.warn('[pagewise] failed to record cost', error);
+      });
+  }
+
+  return result;
+}
 
 const services: SidePanelServices = {
   async getActiveTabId(): Promise<number | null> {
@@ -30,6 +85,7 @@ const services: SidePanelServices = {
     });
     return JumpResponseSchema.parse(response);
   },
+  runAiOrientation,
 };
 
 if (document.readyState === 'loading') {

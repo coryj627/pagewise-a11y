@@ -1,21 +1,42 @@
 import type { NodeRef } from '@/schemas/node-ref';
+import type { OrientationModel } from '@/schemas/orientation-model';
+import type { PageModel } from '@/schemas/page-model';
+import type { PageCapabilityReport } from '@/schemas/capability-report';
+import type { SensitivityReport } from '@/schemas/sensitivity-report';
 import type { ExtractResponse, JumpResponse } from '@/shared/messages-rpc';
+import type { OrientationCallResult } from './api/client';
+import { buildPanelRefResolver } from './ref-resolver';
+
+export type AiOrientationServiceInput = {
+  pageModel: PageModel;
+  capability: PageCapabilityReport;
+  sensitivity: SensitivityReport;
+  refResolver: (id: string) => NodeRef | null;
+};
+
+export type AiOrientationServiceResult =
+  | OrientationCallResult
+  | { kind: 'no_api_key' };
 
 export interface SidePanelServices {
   getActiveTabId(): Promise<number | null>;
   requestExtract(tabId: number): Promise<ExtractResponse>;
   requestJump(tabId: number, nodeRef: NodeRef): Promise<JumpResponse>;
+  runAiOrientation(
+    input: AiOrientationServiceInput
+  ): Promise<AiOrientationServiceResult>;
 }
 
-/**
- * Mount the side panel's deterministic Orientation view against the given
- * document. Tests can drive it by passing fake services; production wires
- * up chrome.tabs + chrome.runtime.sendMessage.
- */
+interface PanelState {
+  lastExtract: Extract<ExtractResponse, { kind: 'ok' }> | null;
+}
+
 export function mountSidePanelUi(
   root: ParentNode,
   services: SidePanelServices
 ): void {
+  const state: PanelState = { lastExtract: null };
+
   const $ = <T extends HTMLElement = HTMLElement>(sel: string): T => {
     const el = root.querySelector(sel);
     if (el === null) throw new Error(`mountSidePanelUi: missing ${sel}`);
@@ -24,12 +45,22 @@ export function mountSidePanelUi(
 
   const status = $('#status-region');
   const extractBtn = $<HTMLButtonElement>('#extract-btn');
+  const aiExtractBtn = $<HTMLButtonElement>('#ai-extract-btn');
   const emptyState = $('#empty-state');
   const result = $('#result');
   const resultHeading = $('#result-heading');
   const pageMeta = $('#page-meta');
   const pageCounts = $('#page-counts');
   const jumpList = $('#jump-list');
+  const confirm = $('#confirm-region');
+  const aiResult = $('#ai-result');
+  const aiResultHeading = $('#ai-result-heading');
+  const aiSummary = $('#ai-summary');
+  const aiMeta = $('#ai-meta');
+  const aiFacts = $('#ai-facts');
+  const aiJumps = $('#ai-jumps');
+  const aiWarningsSection = $('#ai-warnings-section');
+  const aiWarnings = $('#ai-warnings');
 
   const announce = (
     message: string,
@@ -48,13 +79,31 @@ export function mountSidePanelUi(
     return [dt, dd];
   };
 
-  const renderResult = (response: Extract<ExtractResponse, { kind: 'ok' }>): void => {
+  const clearConfirm = (): void => {
+    confirm.replaceChildren();
+    confirm.setAttribute('hidden', '');
+  };
+
+  const refFromCandidates = (id: string): NodeRef | null => {
+    if (state.lastExtract === null) return null;
+    const resolve = buildPanelRefResolver(state.lastExtract.model);
+    return resolve(id);
+  };
+
+  // ─────────────────────────────────────────────────────────
+  // Deterministic Orientation
+  // ─────────────────────────────────────────────────────────
+
+  const renderDeterministicResult = (
+    response: Extract<ExtractResponse, { kind: 'ok' }>
+  ): void => {
     pageMeta.replaceChildren();
     pageMeta.append(
       ...definitionRow('State', response.model.page_state),
       ...definitionRow('URL shape', response.model.url_path_shape),
       ...definitionRow('Title', response.model.title || '(untitled)'),
-      ...definitionRow('Quality', response.capability.extraction_quality)
+      ...definitionRow('Quality', response.capability.extraction_quality),
+      ...definitionRow('Sensitivity', response.sensitivity.page_classification)
     );
     if (response.capability.reasons.length > 0) {
       pageMeta.append(
@@ -82,29 +131,36 @@ export function mountSidePanelUi(
     } else {
       for (const ref of refs) {
         const li = document.createElement('li');
-        const button = document.createElement('button');
-        button.type = 'button';
-        const labelParts: string[] = [];
-        const aria = ref.selector_hints.aria;
-        if (aria?.name !== undefined && aria.name !== '') labelParts.push(aria.name);
-        labelParts.push(`(${ref.hashes.role})`);
-        button.textContent = labelParts.join(' ');
-        button.addEventListener('click', () => {
-          void handleJump(ref, button);
-        });
-        li.append(button);
+        li.append(makeJumpButton(ref));
         jumpList.append(li);
       }
     }
 
     emptyState.setAttribute('hidden', '');
     result.removeAttribute('hidden');
+    aiExtractBtn.disabled = false;
     resultHeading.focus();
+  };
+
+  const makeJumpButton = (ref: NodeRef): HTMLButtonElement => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    const parts: string[] = [];
+    const aria = ref.selector_hints.aria;
+    if (aria?.name !== undefined && aria.name !== '') parts.push(aria.name);
+    parts.push(`(${ref.hashes.role})`);
+    button.textContent = parts.join(' ');
+    button.addEventListener('click', () => {
+      void handleJump(ref, button);
+    });
+    return button;
   };
 
   const handleExtract = async (): Promise<void> => {
     announce('Extracting…', 'info');
     extractBtn.disabled = true;
+    aiExtractBtn.disabled = true;
+    aiResult.setAttribute('hidden', '');
     try {
       const tabId = await services.getActiveTabId();
       if (tabId === null) {
@@ -116,8 +172,9 @@ export function mountSidePanelUi(
         announce(`Extraction failed: ${response.reason}`, 'error');
         return;
       }
+      state.lastExtract = response;
       announce('Extraction ready.', 'ok');
-      renderResult(response);
+      renderDeterministicResult(response);
     } finally {
       extractBtn.disabled = false;
     }
@@ -152,7 +209,229 @@ export function mountSidePanelUi(
     }
   };
 
+  // ─────────────────────────────────────────────────────────
+  // AI Orientation
+  // ─────────────────────────────────────────────────────────
+
+  const handleAiClick = async (): Promise<void> => {
+    if (state.lastExtract === null) {
+      announce('Run a deterministic extraction first.', 'error');
+      return;
+    }
+    const sensitivity = state.lastExtract.sensitivity;
+    if (sensitivity.page_classification !== 'public_likely') {
+      showSensitivityConfirm(sensitivity.page_classification);
+      return;
+    }
+    await runAiCall();
+  };
+
+  const showSensitivityConfirm = (classification: string): void => {
+    confirm.replaceChildren();
+    confirm.removeAttribute('hidden');
+    const heading = document.createElement('h3');
+    heading.id = 'confirm-heading';
+    heading.textContent = `This page is classified as ${classification}`;
+    confirm.append(heading);
+
+    const body = document.createElement('p');
+    body.textContent =
+      'Sending this page to Anthropic will include any non-redacted ' +
+      'content visible in the page model — alt text, headings, link text, ' +
+      'and visible prose. Sensitive form values are not captured. ' +
+      'Make sure you’re comfortable sharing this page before continuing.';
+    confirm.append(body);
+
+    const actions = document.createElement('div');
+    actions.className = 'actions';
+    const yes = document.createElement('button');
+    yes.type = 'button';
+    yes.textContent = 'Send anyway';
+    yes.addEventListener('click', () => {
+      clearConfirm();
+      void runAiCall();
+    });
+    const no = document.createElement('button');
+    no.type = 'button';
+    no.textContent = 'Cancel';
+    no.addEventListener('click', () => {
+      clearConfirm();
+      announce('Cancelled.', 'info');
+    });
+    actions.append(yes, no);
+    confirm.append(actions);
+    yes.focus();
+  };
+
+  const runAiCall = async (): Promise<void> => {
+    if (state.lastExtract === null) return;
+    announce('Asking Claude…', 'info');
+    aiExtractBtn.disabled = true;
+    try {
+      const refResolver = buildPanelRefResolver(state.lastExtract.model);
+      const result = await services.runAiOrientation({
+        pageModel: state.lastExtract.model,
+        capability: state.lastExtract.capability,
+        sensitivity: state.lastExtract.sensitivity,
+        refResolver,
+      });
+      switch (result.kind) {
+        case 'ok':
+          renderAiResult(result.value, result.dropped_refs);
+          announce(
+            result.dropped_refs === 0
+              ? 'AI orientation ready.'
+              : `AI orientation ready (${result.dropped_refs} invalid refs dropped).`,
+            'ok'
+          );
+          break;
+        case 'no_api_key':
+          announce(
+            'No API key set. Open Pagewise options to add one.',
+            'error'
+          );
+          break;
+        case 'no_tool_use':
+          announce(
+            `Claude returned no tool call: ${result.message}`,
+            'error'
+          );
+          break;
+        case 'validation_failed':
+          announce(
+            'Claude returned a malformed response. Try again.',
+            'error'
+          );
+          break;
+        case 'rate_limited':
+          announce(
+            result.retryAfterSec !== undefined
+              ? `Rate limited. Try again in ${result.retryAfterSec}s.`
+              : 'Rate limited. Try again shortly.',
+            'error'
+          );
+          break;
+        case 'auth_failed':
+          announce(
+            'API key was rejected. Check the key in Pagewise options.',
+            'error'
+          );
+          break;
+        case 'network_error':
+          announce(`Network error: ${result.message}`, 'error');
+          break;
+        case 'api_error':
+          announce(
+            `API error${result.status !== undefined ? ` (${result.status})` : ''}: ${result.message}`,
+            'error'
+          );
+          break;
+      }
+    } finally {
+      aiExtractBtn.disabled = false;
+    }
+  };
+
+  const renderAiResult = (model: OrientationModel, droppedRefs: number): void => {
+    aiResult.removeAttribute('hidden');
+    aiSummary.textContent = model.one_line_summary;
+
+    aiMeta.replaceChildren();
+    aiMeta.append(
+      ...definitionRow('Page type', model.page_type),
+      ...definitionRow('Scope', model.page_scope),
+      ...definitionRow('Confidence', model.confidence.toFixed(2))
+    );
+    if (droppedRefs > 0) {
+      aiMeta.append(
+        ...definitionRow('Dropped invalid refs', String(droppedRefs))
+      );
+    }
+
+    aiFacts.replaceChildren();
+    if (model.key_facts.length === 0) {
+      const li = document.createElement('li');
+      li.textContent = 'No key facts produced.';
+      aiFacts.append(li);
+    } else {
+      for (const fact of model.key_facts) {
+        const li = document.createElement('li');
+        const text = document.createElement('p');
+        text.textContent = fact.text;
+        li.append(text);
+        const meta = document.createElement('p');
+        meta.className = 'meta';
+        meta.textContent = `${fact.kind} · confidence ${fact.confidence.toFixed(2)}`;
+        li.append(meta);
+        for (const sourceId of fact.source_node_ref_ids) {
+          const ref = refFromCandidates(sourceId);
+          if (ref === null) continue;
+          li.append(makeWhereFromButton(ref));
+        }
+        aiFacts.append(li);
+      }
+    }
+
+    aiJumps.replaceChildren();
+    const ranked = model.jump_list
+      .filter(
+        (item): item is typeof item & { node_ref_id: string } =>
+          typeof item.node_ref_id === 'string'
+      )
+      .sort((a, b) => a.priority - b.priority);
+    if (ranked.length === 0) {
+      const li = document.createElement('li');
+      li.textContent = 'No ranked jump targets.';
+      aiJumps.append(li);
+    } else {
+      for (const item of ranked) {
+        const ref = refFromCandidates(item.node_ref_id);
+        if (ref === null) continue;
+        const li = document.createElement('li');
+        const button = makeJumpButton(ref);
+        button.textContent = `${item.label} (${item.kind ?? ref.hashes.role})`;
+        li.append(button);
+        if (item.description !== undefined) {
+          const desc = document.createElement('p');
+          desc.className = 'meta';
+          desc.textContent = item.description;
+          li.append(desc);
+        }
+        aiJumps.append(li);
+      }
+    }
+
+    const warnings = model.warnings ?? [];
+    aiWarnings.replaceChildren();
+    if (warnings.length === 0) {
+      aiWarningsSection.setAttribute('hidden', '');
+    } else {
+      aiWarningsSection.removeAttribute('hidden');
+      for (const w of warnings) {
+        const li = document.createElement('li');
+        li.textContent = w.detail !== undefined ? `${w.kind}: ${w.detail}` : w.kind;
+        aiWarnings.append(li);
+      }
+    }
+
+    aiResultHeading.focus();
+  };
+
+  const makeWhereFromButton = (ref: NodeRef): HTMLAnchorElement => {
+    const link = document.createElement('a');
+    link.href = '#';
+    link.textContent = 'Where this came from';
+    link.addEventListener('click', (event) => {
+      event.preventDefault();
+      void handleJump(ref, link as unknown as HTMLButtonElement);
+    });
+    return link;
+  };
+
   extractBtn.addEventListener('click', () => {
     void handleExtract();
+  });
+  aiExtractBtn.addEventListener('click', () => {
+    void handleAiClick();
   });
 }

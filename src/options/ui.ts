@@ -4,11 +4,13 @@ import type {
   DisableResult,
 } from '@/shared/domain-store';
 import type { CostLedger, UsageSummary } from '@/shared/cost-ledger';
+import { ApiKeyStore } from '@/shared/api-key';
 import { formatCostUsd } from '@/shared/pricing';
 
 export interface OptionsServices {
   domains: DomainStore;
   ledger: CostLedger;
+  apiKey: ApiKeyStore;
 }
 
 /**
@@ -22,6 +24,7 @@ export function mountOptionsUi(
 ): void {
   const store = services.domains;
   const ledger = services.ledger;
+  const apiKey = services.apiKey;
   const $ = <T extends Element = HTMLElement>(sel: string): T => {
     const el = root.querySelector(sel);
     if (el === null) throw new Error(`mountOptionsUi: missing element ${sel}`);
@@ -212,6 +215,42 @@ export function mountOptionsUi(
     })();
   });
 
+  // ─────────────────────────────────────────────────────────
+  // API key section
+  // ─────────────────────────────────────────────────────────
+
+  const keyMask = $('#key-mask');
+  const keyForm = $<HTMLFormElement>('#key-form');
+  const keyInput = $<HTMLInputElement>('#key-input');
+  const keyClearBtn = $<HTMLButtonElement>('#key-clear');
+
+  const renderKey = async (): Promise<void> => {
+    const value = await apiKey.get();
+    keyMask.textContent = ApiKeyStore.mask(value);
+  };
+
+  keyForm.addEventListener('submit', (event) => {
+    event.preventDefault();
+    void (async (): Promise<void> => {
+      const value = keyInput.value;
+      await apiKey.set(value);
+      keyInput.value = '';
+      await renderKey();
+      const isSet = await apiKey.isSet();
+      announce(isSet ? 'Saved API key.' : 'Cleared API key.', 'ok');
+    })();
+  });
+
+  keyClearBtn.addEventListener('click', () => {
+    void (async (): Promise<void> => {
+      await apiKey.clear();
+      keyInput.value = '';
+      await renderKey();
+      announce('Cleared API key.', 'ok');
+    })();
+  });
+
   void renderList();
   void renderUsage();
+  void renderKey();
 }

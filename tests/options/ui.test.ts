@@ -6,6 +6,7 @@ import { DomainStore } from '@/shared/domain-store';
 import { MemoryStorageBackend } from '@/shared/storage';
 import { MemoryPermissionsApi } from '@/shared/permissions';
 import { CostLedger } from '@/shared/cost-ledger';
+import { ApiKeyStore } from '@/shared/api-key';
 
 // Vitest is started from the repo root, so a cwd-relative path is stable.
 const HTML_PATH = resolve(process.cwd(), 'src/options/index.html');
@@ -28,13 +29,17 @@ describe('options UI', () => {
   let store: DomainStore;
   let permissions: MemoryPermissionsApi;
   let ledger: CostLedger;
+  let apiKey: ApiKeyStore;
+  let apiKeyStorage: MemoryStorageBackend;
 
   beforeEach(async () => {
     document.body.innerHTML = bodyFromOptionsHtml();
     permissions = new MemoryPermissionsApi();
     store = new DomainStore(new MemoryStorageBackend(), permissions);
     ledger = new CostLedger(new MemoryStorageBackend());
-    mountOptionsUi(document, { domains: store, ledger });
+    apiKeyStorage = new MemoryStorageBackend();
+    apiKey = new ApiKeyStore(apiKeyStorage);
+    mountOptionsUi(document, { domains: store, ledger, apiKey });
     await flushMicrotasks();
   });
 
@@ -128,7 +133,7 @@ describe('options UI', () => {
   it('removes a domain via its Remove button', async () => {
     await store.enable('example.com');
     document.body.innerHTML = bodyFromOptionsHtml();
-    mountOptionsUi(document, { domains: store, ledger });
+    mountOptionsUi(document, { domains: store, ledger, apiKey });
     await flushMicrotasks();
 
     const removeBtn = document.querySelector(
@@ -174,12 +179,62 @@ describe('options UI', () => {
     });
     // Re-mount so the summary reads the seeded ledger.
     document.body.innerHTML = bodyFromOptionsHtml();
-    mountOptionsUi(document, { domains: store, ledger });
+    mountOptionsUi(document, { domains: store, ledger, apiKey });
     await flushMicrotasks();
 
     const today = document.getElementById('usage-today')!.textContent ?? '';
     expect(today).toContain('10,500 tokens');
     expect(today).toContain('$0.04');
+  });
+
+  it('renders "(not set)" mask when no API key is stored', () => {
+    expect(document.getElementById('key-mask')!.textContent).toBe('(not set)');
+  });
+
+  it('saves an API key via the form and updates the masked display', async () => {
+    const input = document.getElementById('key-input') as HTMLInputElement;
+    const form = document.getElementById('key-form') as HTMLFormElement;
+    input.value = 'sk-ant-test-key-12345';
+    form.dispatchEvent(new Event('submit', { cancelable: true }));
+    await flushMicrotasks();
+
+    expect(await apiKey.get()).toBe('sk-ant-test-key-12345');
+    expect(input.value).toBe('');
+    expect(document.getElementById('key-mask')!.textContent).toContain('sk-an');
+    expect(document.getElementById('key-mask')!.textContent).toContain('2345');
+    const status = document.getElementById('status-region')!;
+    expect(status.textContent).toContain('Saved');
+  });
+
+  it('clears the API key via the Clear button', async () => {
+    await apiKey.set('sk-ant-stored');
+    document.body.innerHTML = bodyFromOptionsHtml();
+    mountOptionsUi(document, { domains: store, ledger, apiKey });
+    await flushMicrotasks();
+
+    const clearBtn = document.getElementById('key-clear') as HTMLButtonElement;
+    clearBtn.click();
+    await flushMicrotasks();
+
+    expect(await apiKey.get()).toBeNull();
+    expect(document.getElementById('key-mask')!.textContent).toBe('(not set)');
+    expect(document.getElementById('status-region')!.textContent).toContain('Cleared');
+  });
+
+  it('saving empty input clears the key', async () => {
+    await apiKey.set('sk-ant-existing');
+    document.body.innerHTML = bodyFromOptionsHtml();
+    mountOptionsUi(document, { domains: store, ledger, apiKey });
+    await flushMicrotasks();
+
+    const input = document.getElementById('key-input') as HTMLInputElement;
+    const form = document.getElementById('key-form') as HTMLFormElement;
+    input.value = '   ';
+    form.dispatchEvent(new Event('submit', { cancelable: true }));
+    await flushMicrotasks();
+
+    expect(await apiKey.get()).toBeNull();
+    expect(document.getElementById('key-mask')!.textContent).toBe('(not set)');
   });
 
   it('clears the ledger and updates the summary', async () => {
@@ -190,7 +245,7 @@ describe('options UI', () => {
       cost_usd: 0.01,
     });
     document.body.innerHTML = bodyFromOptionsHtml();
-    mountOptionsUi(document, { domains: store, ledger });
+    mountOptionsUi(document, { domains: store, ledger, apiKey });
     await flushMicrotasks();
 
     const clearBtn = document.getElementById('clear-ledger') as HTMLButtonElement;

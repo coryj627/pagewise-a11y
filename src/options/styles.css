@@ -84,3 +84,15 @@ button {
   opacity: 0.7;
   font-style: italic;
 }
+
+#key-form .actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+code {
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  background: color-mix(in srgb, currentColor 8%, transparent);
+  padding: 0.1rem 0.35rem;
+  border-radius: 0.2rem;
+}

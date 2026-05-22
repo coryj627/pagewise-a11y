@@ -59,6 +59,37 @@
         </ul>
       </section>
 
+      <section aria-labelledby="key-heading">
+        <h2 id="key-heading">Anthropic API key</h2>
+        <p>
+          Stored locally with restricted access — it is sent only as the
+          <code>Authorization</code> header to <code>api.anthropic.com</code>
+          when Pagewise makes a request. Pagewise has no server.
+        </p>
+
+        <p id="key-current">
+          Current key: <code id="key-mask">(not set)</code>
+        </p>
+
+        <form id="key-form" novalidate>
+          <div class="field">
+            <label for="key-input">New key</label>
+            <input
+              id="key-input"
+              name="key"
+              type="password"
+              autocomplete="off"
+              spellcheck="false"
+              placeholder="sk-ant-…"
+            />
+          </div>
+          <div class="actions">
+            <button type="submit">Save</button>
+            <button type="button" id="key-clear">Clear</button>
+          </div>
+        </form>
+      </section>
+
       <section aria-labelledby="usage-heading">
         <h2 id="usage-heading">Usage</h2>
         <p>

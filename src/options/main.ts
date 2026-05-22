@@ -3,6 +3,7 @@ import { ChromeStorageBackend } from '@/shared/storage';
 import { ChromePermissionsApi } from '@/shared/permissions';
 import { DomainStore } from '@/shared/domain-store';
 import { CostLedger } from '@/shared/cost-ledger';
+import { ApiKeyStore } from '@/shared/api-key';
 import { mountOptionsUi } from './ui';
 
 const storage = new ChromeStorageBackend(chrome.storage.local);
@@ -10,6 +11,7 @@ const permissions = new ChromePermissionsApi();
 const services = {
   domains: new DomainStore(storage, permissions),
   ledger: new CostLedger(storage),
+  apiKey: new ApiKeyStore(storage),
 };
 
 if (document.readyState === 'loading') {
