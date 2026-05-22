@@ -57,6 +57,22 @@ describe('DomainStore — enable / isEnabled / getEnabledDomains', () => {
     expect(await permissions.getAllOrigins()).toEqual([]);
   });
 
+  it.each([
+    'chrome://settings',
+    'chrome-extension://abc/options.html',
+    'about:blank',
+    'file:///etc/hosts',
+    'view-source:https://example.com',
+  ])('hard-blocks privileged scheme "%s" without touching permissions', async (input) => {
+    const result = await store.enable(input);
+    expect(result).toMatchObject({
+      kind: 'invalid_domain',
+      reason: 'privileged_scheme',
+    });
+    expect(await permissions.getAllOrigins()).toEqual([]);
+    expect(await store.getEnabledDomains()).toEqual([]);
+  });
+
   it('returns permission_denied when the user declines', async () => {
     permissions.setAutoApprove(false);
     const result = await store.enable('example.com');

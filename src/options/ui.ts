@@ -106,12 +106,33 @@ export function mountOptionsUi(
       'Anthropic and your own choice to use Pagewise here before enabling.';
     confirm.append(body);
 
+    // Architecture §10.4 — sensitive domains require "extra
+    // confirmation". A consent checkbox forces the user to actively
+    // acknowledge the implication before the Enable button activates.
+    const consentLabel = document.createElement('label');
+    consentLabel.className = 'consent';
+    const consent = document.createElement('input');
+    consent.type = 'checkbox';
+    consent.id = 'consent-sensitive';
+    consentLabel.append(consent);
+    const consentText = document.createTextNode(
+      ` I understand that Pagewise can send page content from ${host} to ` +
+        'Anthropic when I press Run with AI.'
+    );
+    consentLabel.append(consentText);
+    confirm.append(consentLabel);
+
     const actions = document.createElement('div');
     actions.className = 'actions';
     const yes = document.createElement('button');
     yes.type = 'button';
-    yes.textContent = 'Enable anyway';
+    yes.textContent = `Enable ${host}`;
+    yes.disabled = true;
+    consent.addEventListener('change', () => {
+      yes.disabled = !consent.checked;
+    });
     yes.addEventListener('click', () => {
+      if (!consent.checked) return;
       void handleEnable(host, { confirmSensitive: true });
     });
     const no = document.createElement('button');
@@ -123,7 +144,7 @@ export function mountOptionsUi(
     });
     actions.append(yes, no);
     confirm.append(actions);
-    (yes as HTMLElement).focus();
+    consent.focus();
   };
 
   const explainResult = (result: EnableResult | DisableResult): {
@@ -140,6 +161,13 @@ export function mountOptionsUi(
       case 'not_enabled':
         return { message: `${result.host} is not enabled.`, tone: 'info' };
       case 'invalid_domain':
+        if (result.reason === 'privileged_scheme') {
+          return {
+            message:
+              'Pagewise cannot run on chrome://, file://, or other browser-internal URLs.',
+            tone: 'error',
+          };
+        }
         return {
           message: `That doesn't look like a valid domain (${result.reason}).`,
           tone: 'error',

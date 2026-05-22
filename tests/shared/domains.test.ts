@@ -66,6 +66,36 @@ describe('normalizeDomain', () => {
     expect(normalizeDomain('not a hostname').kind).toBe('invalid');
     expect(normalizeDomain('http://').kind).toBe('invalid');
   });
+
+  it.each([
+    'chrome://settings',
+    'chrome-extension://abcdef/options.html',
+    'about:blank',
+    'file:///etc/hosts',
+    'view-source:https://example.com',
+    'javascript:alert(1)',
+    'data:text/html,<script>',
+    'blob:https://example.com/uuid',
+    'edge://flags',
+    'moz-extension://abcd/x',
+    'devtools://devtools/',
+  ])('rejects privileged scheme "%s" with reason privileged_scheme', (input) => {
+    expect(normalizeDomain(input)).toEqual({
+      kind: 'invalid',
+      reason: 'privileged_scheme',
+    });
+  });
+
+  it('is case-insensitive for the privileged-scheme check', () => {
+    expect(normalizeDomain('CHROME://settings')).toEqual({
+      kind: 'invalid',
+      reason: 'privileged_scheme',
+    });
+    expect(normalizeDomain('  Chrome-Extension://abc  ')).toEqual({
+      kind: 'invalid',
+      reason: 'privileged_scheme',
+    });
+  });
 });
 
 describe('buildOriginPattern', () => {

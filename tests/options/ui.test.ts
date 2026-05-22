@@ -114,7 +114,7 @@ describe('options UI', () => {
     expect(await store.isEnabled('chase.com')).toBe(false);
   });
 
-  it('enables a sensitive domain when the user confirms', async () => {
+  it('enables a sensitive domain only after the consent checkbox is checked', async () => {
     const input = document.getElementById('add-input') as HTMLInputElement;
     const form = document.getElementById('add-form') as HTMLFormElement;
 
@@ -123,16 +123,44 @@ describe('options UI', () => {
     await flushMicrotasks();
 
     const confirmRegion = document.getElementById('confirm-region')!;
-    const enableButton = Array.from(
-      confirmRegion.querySelectorAll('button')
-    ).find((b) => b.textContent === 'Enable anyway')!;
-    enableButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    const enableBtn = Array.from(
+      confirmRegion.querySelectorAll<HTMLButtonElement>('button')
+    ).find((b) => b.textContent?.startsWith('Enable '))!;
+    expect(enableBtn.textContent).toBe('Enable chase.com');
+    expect(enableBtn.disabled).toBe(true);
+
+    // Clicking while disabled is a no-op.
+    enableBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await flushMicrotasks();
+    expect(await store.isEnabled('chase.com')).toBe(false);
+
+    const consent = document.getElementById(
+      'consent-sensitive'
+    ) as HTMLInputElement;
+    consent.checked = true;
+    consent.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(enableBtn.disabled).toBe(false);
+
+    enableBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     await flushMicrotasks();
 
     expect(await store.isEnabled('chase.com')).toBe(true);
     expect(confirmRegion.hasAttribute('hidden')).toBe(true);
     const list = document.getElementById('domains-list')!;
     expect(list.textContent).toContain('chase.com');
+  });
+
+  it('reports a clear error message when given a privileged-scheme URL', async () => {
+    const input = document.getElementById('add-input') as HTMLInputElement;
+    const form = document.getElementById('add-form') as HTMLFormElement;
+    input.value = 'chrome://settings';
+    form.dispatchEvent(new Event('submit', { cancelable: true }));
+    await flushMicrotasks();
+
+    const status = document.getElementById('status-region')!;
+    expect(status.textContent).toContain('chrome://');
+    expect(status.getAttribute('data-tone')).toBe('error');
+    expect(await store.isEnabled('chrome://settings')).toBe(false);
   });
 
   it('removes a domain via its Remove button', async () => {

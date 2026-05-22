@@ -13,7 +13,34 @@ export type SensitiveCategory =
 
 export type DomainNormalization =
   | { kind: 'ok'; host: string }
-  | { kind: 'invalid'; reason: 'empty' | 'malformed' | 'not_a_hostname' };
+  | {
+      kind: 'invalid';
+      reason: 'empty' | 'malformed' | 'not_a_hostname' | 'privileged_scheme';
+    };
+
+/**
+ * URL schemes Pagewise will never grant a content script on. Chrome itself
+ * refuses the permission for most of these, but we reject them at the
+ * input layer so the user gets a clear "no, you can't enable
+ * chrome://settings" message rather than a silent failure or a misleading
+ * "permission denied".
+ */
+const BLOCKED_SCHEMES = new Set<string>([
+  'chrome',
+  'chrome-extension',
+  'about',
+  'file',
+  'view-source',
+  'javascript',
+  'data',
+  'blob',
+  'edge',
+  'brave',
+  'opera',
+  'moz-extension',
+  'safari-extension',
+  'devtools',
+]);
 
 export type SensitivityCheck =
   | { sensitive: true; category: SensitiveCategory; matched: string }
@@ -32,6 +59,17 @@ export function normalizeDomain(input: unknown): DomainNormalization {
   const trimmed = input.trim();
   if (trimmed === '') return { kind: 'invalid', reason: 'empty' };
 
+  // Hard-block privileged schemes BEFORE we attempt URL parsing. Catching
+  // these early lets us return a specific reason the UI can explain rather
+  // than letting them parse into something weird like a "settings" host.
+  const schemeMatch = trimmed.match(/^([a-z][a-z0-9+\-.]*):/i);
+  if (schemeMatch !== null) {
+    const scheme = schemeMatch[1]!.toLowerCase();
+    if (BLOCKED_SCHEMES.has(scheme)) {
+      return { kind: 'invalid', reason: 'privileged_scheme' };
+    }
+  }
+
   let url: URL | null = null;
   try {
     url = new URL(trimmed);
@@ -48,6 +86,13 @@ export function normalizeDomain(input: unknown): DomainNormalization {
     } catch {
       return { kind: 'invalid', reason: 'malformed' };
     }
+  }
+
+  // Defensive second check: if the parsed URL itself uses a blocked
+  // scheme (e.g., the user pasted "file:///path"), reject.
+  const parsedScheme = url.protocol.replace(/:$/, '').toLowerCase();
+  if (BLOCKED_SCHEMES.has(parsedScheme)) {
+    return { kind: 'invalid', reason: 'privileged_scheme' };
   }
 
   const host = url.hostname.toLowerCase().replace(/\.$/, '');

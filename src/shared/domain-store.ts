@@ -17,7 +17,10 @@ export type EnableOptions = {
 export type EnableResult =
   | { kind: 'enabled'; host: string }
   | { kind: 'already_enabled'; host: string }
-  | { kind: 'invalid_domain'; reason: 'empty' | 'malformed' | 'not_a_hostname' }
+  | {
+      kind: 'invalid_domain';
+      reason: 'empty' | 'malformed' | 'not_a_hostname' | 'privileged_scheme';
+    }
   | {
       kind: 'sensitive_confirmation_required';
       host: string;
@@ -30,7 +33,10 @@ export type EnableResult =
 export type DisableResult =
   | { kind: 'disabled'; host: string }
   | { kind: 'not_enabled'; host: string }
-  | { kind: 'invalid_domain'; reason: 'empty' | 'malformed' | 'not_a_hostname' };
+  | {
+      kind: 'invalid_domain';
+      reason: 'empty' | 'malformed' | 'not_a_hostname' | 'privileged_scheme';
+    };
 
 /**
  * Single source of truth for "which domains is Pagewise allowed to run on?"
