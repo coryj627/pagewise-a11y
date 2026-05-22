@@ -7,6 +7,7 @@ import { MemoryStorageBackend } from '@/shared/storage';
 import { MemoryPermissionsApi } from '@/shared/permissions';
 import { CostLedger } from '@/shared/cost-ledger';
 import { ApiKeyStore } from '@/shared/api-key';
+import { DisclosurePreference } from '@/shared/disclosure';
 
 // Vitest is started from the repo root, so a cwd-relative path is stable.
 const HTML_PATH = resolve(process.cwd(), 'src/options/index.html');
@@ -31,6 +32,8 @@ describe('options UI', () => {
   let ledger: CostLedger;
   let apiKey: ApiKeyStore;
   let apiKeyStorage: MemoryStorageBackend;
+  let disclosure: DisclosurePreference;
+  let disclosureStorage: MemoryStorageBackend;
 
   beforeEach(async () => {
     document.body.innerHTML = bodyFromOptionsHtml();
@@ -39,7 +42,9 @@ describe('options UI', () => {
     ledger = new CostLedger(new MemoryStorageBackend());
     apiKeyStorage = new MemoryStorageBackend();
     apiKey = new ApiKeyStore(apiKeyStorage);
-    mountOptionsUi(document, { domains: store, ledger, apiKey });
+    disclosureStorage = new MemoryStorageBackend();
+    disclosure = new DisclosurePreference(disclosureStorage);
+    mountOptionsUi(document, { domains: store, ledger, apiKey, disclosure });
     await flushMicrotasks();
   });
 
@@ -133,7 +138,7 @@ describe('options UI', () => {
   it('removes a domain via its Remove button', async () => {
     await store.enable('example.com');
     document.body.innerHTML = bodyFromOptionsHtml();
-    mountOptionsUi(document, { domains: store, ledger, apiKey });
+    mountOptionsUi(document, { domains: store, ledger, apiKey, disclosure });
     await flushMicrotasks();
 
     const removeBtn = document.querySelector(
@@ -179,7 +184,7 @@ describe('options UI', () => {
     });
     // Re-mount so the summary reads the seeded ledger.
     document.body.innerHTML = bodyFromOptionsHtml();
-    mountOptionsUi(document, { domains: store, ledger, apiKey });
+    mountOptionsUi(document, { domains: store, ledger, apiKey, disclosure });
     await flushMicrotasks();
 
     const today = document.getElementById('usage-today')!.textContent ?? '';
@@ -209,7 +214,7 @@ describe('options UI', () => {
   it('clears the API key via the Clear button', async () => {
     await apiKey.set('sk-ant-stored');
     document.body.innerHTML = bodyFromOptionsHtml();
-    mountOptionsUi(document, { domains: store, ledger, apiKey });
+    mountOptionsUi(document, { domains: store, ledger, apiKey, disclosure });
     await flushMicrotasks();
 
     const clearBtn = document.getElementById('key-clear') as HTMLButtonElement;
@@ -224,7 +229,7 @@ describe('options UI', () => {
   it('saving empty input clears the key', async () => {
     await apiKey.set('sk-ant-existing');
     document.body.innerHTML = bodyFromOptionsHtml();
-    mountOptionsUi(document, { domains: store, ledger, apiKey });
+    mountOptionsUi(document, { domains: store, ledger, apiKey, disclosure });
     await flushMicrotasks();
 
     const input = document.getElementById('key-input') as HTMLInputElement;
@@ -237,6 +242,42 @@ describe('options UI', () => {
     expect(document.getElementById('key-mask')!.textContent).toBe('(not set)');
   });
 
+  it('reflects the current disclosure mode in the radio group', async () => {
+    expect(
+      (document.getElementById('disclosure-auto') as HTMLInputElement).checked
+    ).toBe(true);
+    expect(
+      (document.getElementById('disclosure-always') as HTMLInputElement).checked
+    ).toBe(false);
+  });
+
+  it('shows the auto-mode counter status', () => {
+    const text = document.getElementById('disclosure-counter')!.textContent ?? '';
+    expect(text).toContain('Auto');
+    expect(text).toContain('0 of 5');
+  });
+
+  it('persists a mode change made via the radio group', async () => {
+    const never = document.getElementById('disclosure-never') as HTMLInputElement;
+    never.checked = true;
+    never.dispatchEvent(new Event('change', { bubbles: true }));
+    await flushMicrotasks();
+
+    expect(await disclosure.getMode()).toBe('never');
+    expect(document.getElementById('disclosure-counter')!.textContent).toBe('');
+    const status = document.getElementById('status-region')!;
+    expect(status.textContent).toContain('never');
+  });
+
+  it('shows the disabled message once auto counter is exhausted', async () => {
+    for (let i = 0; i < 5; i++) await disclosure.recordConfirmation();
+    document.body.innerHTML = bodyFromOptionsHtml();
+    mountOptionsUi(document, { domains: store, ledger, apiKey, disclosure });
+    await flushMicrotasks();
+    const text = document.getElementById('disclosure-counter')!.textContent ?? '';
+    expect(text).toContain('disabled');
+  });
+
   it('clears the ledger and updates the summary', async () => {
     await ledger.record({
       model: 'claude-sonnet-4-6',
@@ -245,7 +286,7 @@ describe('options UI', () => {
       cost_usd: 0.01,
     });
     document.body.innerHTML = bodyFromOptionsHtml();
-    mountOptionsUi(document, { domains: store, ledger, apiKey });
+    mountOptionsUi(document, { domains: store, ledger, apiKey, disclosure });
     await flushMicrotasks();
 
     const clearBtn = document.getElementById('clear-ledger') as HTMLButtonElement;

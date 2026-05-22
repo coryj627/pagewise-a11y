@@ -5,12 +5,18 @@ import type {
 } from '@/shared/domain-store';
 import type { CostLedger, UsageSummary } from '@/shared/cost-ledger';
 import { ApiKeyStore } from '@/shared/api-key';
+import {
+  DISCLOSURE_AUTO_DISABLE_AFTER,
+  type DisclosurePreference,
+  type DisclosureMode,
+} from '@/shared/disclosure';
 import { formatCostUsd } from '@/shared/pricing';
 
 export interface OptionsServices {
   domains: DomainStore;
   ledger: CostLedger;
   apiKey: ApiKeyStore;
+  disclosure: DisclosurePreference;
 }
 
 /**
@@ -25,6 +31,7 @@ export function mountOptionsUi(
   const store = services.domains;
   const ledger = services.ledger;
   const apiKey = services.apiKey;
+  const disclosure = services.disclosure;
   const $ = <T extends Element = HTMLElement>(sel: string): T => {
     const el = root.querySelector(sel);
     if (el === null) throw new Error(`mountOptionsUi: missing element ${sel}`);
@@ -250,7 +257,45 @@ export function mountOptionsUi(
     })();
   });
 
+  // ─────────────────────────────────────────────────────────
+  // Disclosure preference section
+  // ─────────────────────────────────────────────────────────
+
+  const disclosureRadios = root.querySelectorAll<HTMLInputElement>(
+    'input[name="disclosure-mode"]'
+  );
+  const disclosureCounter = $('#disclosure-counter');
+
+  const renderDisclosure = async (): Promise<void> => {
+    const mode = await disclosure.getMode();
+    const counter = await disclosure.getCounter();
+    for (const radio of Array.from(disclosureRadios)) {
+      radio.checked = radio.value === mode;
+    }
+    if (mode === 'auto_first_5') {
+      const remaining = Math.max(0, DISCLOSURE_AUTO_DISABLE_AFTER - counter);
+      disclosureCounter.textContent =
+        remaining === 0
+          ? `Auto: already shown ${counter} times — the prompt is currently disabled. Switch modes to re-enable it.`
+          : `Auto: ${counter} of ${DISCLOSURE_AUTO_DISABLE_AFTER} confirmations recorded so far (${remaining} remaining).`;
+    } else {
+      disclosureCounter.textContent = '';
+    }
+  };
+
+  for (const radio of Array.from(disclosureRadios)) {
+    radio.addEventListener('change', () => {
+      const value = radio.value as DisclosureMode;
+      void (async (): Promise<void> => {
+        await disclosure.setMode(value);
+        await renderDisclosure();
+        announce(`Cost disclosure set to: ${value.replace(/_/g, ' ')}.`, 'ok');
+      })();
+    });
+  }
+
   void renderList();
   void renderUsage();
   void renderKey();
+  void renderDisclosure();
 }

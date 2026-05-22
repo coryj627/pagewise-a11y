@@ -4,6 +4,7 @@ import type { PageModel } from '@/schemas/page-model';
 import type { PageCapabilityReport } from '@/schemas/capability-report';
 import type { SensitivityReport } from '@/schemas/sensitivity-report';
 import type { ExtractResponse, JumpResponse } from '@/shared/messages-rpc';
+import { formatCostUsd } from '@/shared/pricing';
 import type { OrientationCallResult } from './api/client';
 import { buildPanelRefResolver } from './ref-resolver';
 
@@ -18,6 +19,11 @@ export type AiOrientationServiceResult =
   | OrientationCallResult
   | { kind: 'no_api_key' };
 
+export interface DisclosureService {
+  shouldPrompt(): Promise<boolean>;
+  recordConfirmation(): Promise<void>;
+}
+
 export interface SidePanelServices {
   getActiveTabId(): Promise<number | null>;
   requestExtract(tabId: number): Promise<ExtractResponse>;
@@ -25,6 +31,10 @@ export interface SidePanelServices {
   runAiOrientation(
     input: AiOrientationServiceInput
   ): Promise<AiOrientationServiceResult>;
+  estimateCall(
+    input: AiOrientationServiceInput
+  ): Promise<{ tokens: number; cost_usd: number }>;
+  disclosure: DisclosureService;
 }
 
 interface PanelState {
@@ -223,6 +233,22 @@ export function mountSidePanelUi(
       showSensitivityConfirm(sensitivity.page_classification);
       return;
     }
+    await afterSensitivityConfirmed();
+  };
+
+  const afterSensitivityConfirmed = async (): Promise<void> => {
+    if (state.lastExtract === null) return;
+    if (await services.disclosure.shouldPrompt()) {
+      const refResolver = buildPanelRefResolver(state.lastExtract.model);
+      const estimated = await services.estimateCall({
+        pageModel: state.lastExtract.model,
+        capability: state.lastExtract.capability,
+        sensitivity: state.lastExtract.sensitivity,
+        refResolver,
+      });
+      showDisclosurePrompt(estimated);
+      return;
+    }
     await runAiCall();
   };
 
@@ -249,7 +275,50 @@ export function mountSidePanelUi(
     yes.textContent = 'Send anyway';
     yes.addEventListener('click', () => {
       clearConfirm();
-      void runAiCall();
+      void afterSensitivityConfirmed();
+    });
+    const no = document.createElement('button');
+    no.type = 'button';
+    no.textContent = 'Cancel';
+    no.addEventListener('click', () => {
+      clearConfirm();
+      announce('Cancelled.', 'info');
+    });
+    actions.append(yes, no);
+    confirm.append(actions);
+    yes.focus();
+  };
+
+  const showDisclosurePrompt = (estimated: {
+    tokens: number;
+    cost_usd: number;
+  }): void => {
+    confirm.replaceChildren();
+    confirm.removeAttribute('hidden');
+
+    const heading = document.createElement('h3');
+    heading.id = 'confirm-heading';
+    heading.textContent = 'About to analyze this page';
+    confirm.append(heading);
+
+    const body = document.createElement('p');
+    body.textContent =
+      `Estimated input: ~${estimated.tokens.toLocaleString()} tokens. ` +
+      `Estimated cost: about ${formatCostUsd(estimated.cost_usd)}. ` +
+      'Send page content to Anthropic?';
+    confirm.append(body);
+
+    const actions = document.createElement('div');
+    actions.className = 'actions';
+    const yes = document.createElement('button');
+    yes.type = 'button';
+    yes.textContent = 'Send';
+    yes.addEventListener('click', () => {
+      clearConfirm();
+      void (async (): Promise<void> => {
+        await services.disclosure.recordConfirmation();
+        await runAiCall();
+      })();
     });
     const no = document.createElement('button');
     no.type = 'button';

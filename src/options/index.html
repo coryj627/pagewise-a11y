@@ -90,6 +90,47 @@
         </form>
       </section>
 
+      <section aria-labelledby="disclosure-heading">
+        <h2 id="disclosure-heading">Cost disclosure</h2>
+        <p>
+          Show an "About to analyze this page — N tokens, ~$X"
+          confirmation before each AI call. By default Pagewise shows it
+          for your first five uses then disables itself; you can change
+          that here.
+        </p>
+        <fieldset>
+          <legend>When to show the disclosure prompt</legend>
+          <label>
+            <input
+              type="radio"
+              name="disclosure-mode"
+              value="always"
+              id="disclosure-always"
+            />
+            Always
+          </label>
+          <label>
+            <input
+              type="radio"
+              name="disclosure-mode"
+              value="auto_first_5"
+              id="disclosure-auto"
+            />
+            First 5 calls, then off
+          </label>
+          <label>
+            <input
+              type="radio"
+              name="disclosure-mode"
+              value="never"
+              id="disclosure-never"
+            />
+            Never
+          </label>
+        </fieldset>
+        <p id="disclosure-counter"></p>
+      </section>
+
       <section aria-labelledby="usage-heading">
         <h2 id="usage-heading">Usage</h2>
         <p>

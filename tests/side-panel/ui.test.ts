@@ -137,6 +137,11 @@ describe('side panel UI', () => {
   let runAiOrientation: Mock<
     (input: AiOrientationServiceInput) => Promise<AiOrientationServiceResult>
   >;
+  let estimateCall: Mock<
+    (input: AiOrientationServiceInput) => Promise<{ tokens: number; cost_usd: number }>
+  >;
+  let shouldPrompt: Mock<() => Promise<boolean>>;
+  let recordConfirmation: Mock<() => Promise<void>>;
 
   beforeEach(() => {
     document.body.innerHTML = bodyFromSidePanelHtml();
@@ -149,6 +154,9 @@ describe('side panel UI', () => {
       element: { role: 'main', name: 'Main', tag: 'main' },
     }));
     runAiOrientation = vi.fn(async () => ({ kind: 'no_api_key' }));
+    estimateCall = vi.fn(async () => ({ tokens: 18400, cost_usd: 0.06 }));
+    shouldPrompt = vi.fn(async () => false);
+    recordConfirmation = vi.fn(async () => {});
   });
 
   function mountWithServices(): void {
@@ -157,6 +165,8 @@ describe('side panel UI', () => {
       requestExtract,
       requestJump,
       runAiOrientation,
+      estimateCall,
+      disclosure: { shouldPrompt, recordConfirmation },
     };
     mountSidePanelUi(document, services);
   }
@@ -447,6 +457,83 @@ describe('side panel UI', () => {
     const status = document.getElementById('status-region')!;
     expect(status.textContent).toContain('30s');
     expect(status.getAttribute('data-tone')).toBe('error');
+  });
+
+  it('shows the cost disclosure prompt when shouldPrompt returns true', async () => {
+    shouldPrompt = vi.fn(async () => true);
+    estimateCall = vi.fn(async () => ({ tokens: 18400, cost_usd: 0.06 }));
+    mountWithServices();
+    (document.getElementById('extract-btn') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    (document.getElementById('ai-extract-btn') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    expect(runAiOrientation).not.toHaveBeenCalled();
+    const confirmRegion = document.getElementById('confirm-region')!;
+    expect(confirmRegion.hasAttribute('hidden')).toBe(false);
+    expect(confirmRegion.textContent).toContain('18,400 tokens');
+    expect(confirmRegion.textContent).toContain('$0.06');
+  });
+
+  it('records a confirmation and proceeds when the user clicks Send on disclosure', async () => {
+    shouldPrompt = vi.fn(async () => true);
+    runAiOrientation = vi.fn(async () => ({
+      kind: 'ok',
+      value: makeAiModel('n_00000'),
+      dropped_refs: 0,
+      usage: null,
+    }));
+    mountWithServices();
+    (document.getElementById('extract-btn') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    (document.getElementById('ai-extract-btn') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    const sendBtn = Array.from(
+      document.querySelectorAll<HTMLButtonElement>('#confirm-region button')
+    ).find((b) => b.textContent === 'Send')!;
+    sendBtn.click();
+    await flushMicrotasks();
+
+    expect(recordConfirmation).toHaveBeenCalledOnce();
+    expect(runAiOrientation).toHaveBeenCalledOnce();
+    expect(document.getElementById('ai-result')?.hasAttribute('hidden')).toBe(false);
+  });
+
+  it('does NOT record a confirmation when the user cancels the disclosure', async () => {
+    shouldPrompt = vi.fn(async () => true);
+    mountWithServices();
+    (document.getElementById('extract-btn') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    (document.getElementById('ai-extract-btn') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    const cancelBtn = Array.from(
+      document.querySelectorAll<HTMLButtonElement>('#confirm-region button')
+    ).find((b) => b.textContent === 'Cancel')!;
+    cancelBtn.click();
+    await flushMicrotasks();
+
+    expect(recordConfirmation).not.toHaveBeenCalled();
+    expect(runAiOrientation).not.toHaveBeenCalled();
+  });
+
+  it('skips the disclosure prompt when shouldPrompt returns false', async () => {
+    shouldPrompt = vi.fn(async () => false);
+    runAiOrientation = vi.fn(async () => ({
+      kind: 'ok',
+      value: makeAiModel('n_00000'),
+      dropped_refs: 0,
+      usage: null,
+    }));
+    mountWithServices();
+    (document.getElementById('extract-btn') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    (document.getElementById('ai-extract-btn') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    expect(estimateCall).not.toHaveBeenCalled();
+    expect(runAiOrientation).toHaveBeenCalledOnce();
   });
 
   it('reports dropped refs in the success announcement', async () => {

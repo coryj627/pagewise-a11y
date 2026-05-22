@@ -14,15 +14,23 @@ import {
 import { ChromeStorageBackend } from '@/shared/storage';
 import { ApiKeyStore } from '@/shared/api-key';
 import { CostLedger } from '@/shared/cost-ledger';
+import { DisclosurePreference } from '@/shared/disclosure';
 import {
   createAnthropicClient,
   DEFAULT_MODEL,
 } from './api/client';
 import { estimateCost, pricingForModel } from '@/shared/pricing';
+import { estimateRequestTokens } from '@/shared/tokens';
+import { ORIENTATION_SYSTEM_PROMPT } from '@/system-prompts';
+import { summarizePageTool } from '@/schemas/orientation-model';
 
 const storage = new ChromeStorageBackend(chrome.storage.local);
 const apiKey = new ApiKeyStore(storage);
 const ledger = new CostLedger(storage);
+const disclosure = new DisclosurePreference(storage);
+
+/** Rough heuristic: orientation responses average ~500 output tokens. */
+const ESTIMATED_OUTPUT_TOKENS = 500;
 
 async function runAiOrientation(
   input: AiOrientationServiceInput
@@ -62,6 +70,30 @@ async function runAiOrientation(
   return result;
 }
 
+async function estimateCall(
+  input: AiOrientationServiceInput
+): Promise<{ tokens: number; cost_usd: number }> {
+  const userMessage = JSON.stringify({
+    page_model: input.pageModel,
+    capability: input.capability,
+    sensitivity: input.sensitivity,
+  });
+  const breakdown = estimateRequestTokens({
+    systemPrompt: ORIENTATION_SYSTEM_PROMPT,
+    toolsJson: JSON.stringify(summarizePageTool),
+    userMessage,
+  });
+  const pricing = pricingForModel(DEFAULT_MODEL);
+  const cost = estimateCost(
+    {
+      input_tokens: breakdown.total,
+      output_tokens: ESTIMATED_OUTPUT_TOKENS,
+    },
+    pricing
+  );
+  return { tokens: breakdown.total, cost_usd: cost };
+}
+
 const services: SidePanelServices = {
   async getActiveTabId(): Promise<number | null> {
     const [tab] = await chrome.tabs.query({
@@ -86,6 +118,11 @@ const services: SidePanelServices = {
     return JumpResponseSchema.parse(response);
   },
   runAiOrientation,
+  estimateCall,
+  disclosure: {
+    shouldPrompt: () => disclosure.shouldPrompt(),
+    recordConfirmation: () => disclosure.recordConfirmation(),
+  },
 };
 
 if (document.readyState === 'loading') {
