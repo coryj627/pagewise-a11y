@@ -8,6 +8,7 @@ import { MemoryPermissionsApi } from '@/shared/permissions';
 import { CostLedger } from '@/shared/cost-ledger';
 import { ApiKeyStore } from '@/shared/api-key';
 import { DisclosurePreference } from '@/shared/disclosure';
+import { OnboardingPreference } from '@/shared/onboarding';
 
 // Vitest is started from the repo root, so a cwd-relative path is stable.
 const HTML_PATH = resolve(process.cwd(), 'src/options/index.html');
@@ -34,6 +35,8 @@ describe('options UI', () => {
   let apiKeyStorage: MemoryStorageBackend;
   let disclosure: DisclosurePreference;
   let disclosureStorage: MemoryStorageBackend;
+  let onboarding: OnboardingPreference;
+  let onboardingStorage: MemoryStorageBackend;
 
   beforeEach(async () => {
     document.body.innerHTML = bodyFromOptionsHtml();
@@ -44,7 +47,15 @@ describe('options UI', () => {
     apiKey = new ApiKeyStore(apiKeyStorage);
     disclosureStorage = new MemoryStorageBackend();
     disclosure = new DisclosurePreference(disclosureStorage);
-    mountOptionsUi(document, { domains: store, ledger, apiKey, disclosure });
+    onboardingStorage = new MemoryStorageBackend();
+    onboarding = new OnboardingPreference(onboardingStorage);
+    mountOptionsUi(document, {
+      domains: store,
+      ledger,
+      apiKey,
+      disclosure,
+      onboarding,
+    });
     await flushMicrotasks();
   });
 
@@ -177,6 +188,80 @@ describe('options UI', () => {
     expect(matches.length).toBeLessThanOrEqual(1);
   });
 
+  it('shows the welcome section on first render (no key, no domains)', () => {
+    const welcome = document.getElementById('welcome')!;
+    expect(welcome.hasAttribute('hidden')).toBe(false);
+    expect(
+      document
+        .getElementById('welcome-step-key')!
+        .getAttribute('data-complete')
+    ).toBe('false');
+    expect(
+      document
+        .getElementById('welcome-step-domain')!
+        .getAttribute('data-complete')
+    ).toBe('false');
+  });
+
+  it('marks step 1 as Done once the API key is saved', async () => {
+    const input = document.getElementById('key-input') as HTMLInputElement;
+    const form = document.getElementById('key-form') as HTMLFormElement;
+    input.value = 'sk-ant-test-key';
+    form.dispatchEvent(new Event('submit', { cancelable: true }));
+    await flushMicrotasks();
+
+    const step = document.getElementById('welcome-step-key')!;
+    expect(step.getAttribute('data-complete')).toBe('true');
+    expect(step.querySelector('.welcome-status')?.textContent).toBe('Done');
+  });
+
+  it('marks step 2 as Done once a domain is enabled', async () => {
+    const input = document.getElementById('add-input') as HTMLInputElement;
+    const form = document.getElementById('add-form') as HTMLFormElement;
+    input.value = 'example.com';
+    form.dispatchEvent(new Event('submit', { cancelable: true }));
+    await flushMicrotasks();
+
+    const step = document.getElementById('welcome-step-domain')!;
+    expect(step.getAttribute('data-complete')).toBe('true');
+  });
+
+  it('auto-hides the welcome section once both key + a domain are set', async () => {
+    await apiKey.set('sk-ant-x');
+    await store.enable('example.com');
+    document.body.innerHTML = bodyFromOptionsHtml();
+    mountOptionsUi(document, {
+      domains: store,
+      ledger,
+      apiKey,
+      disclosure,
+      onboarding,
+    });
+    await flushMicrotasks();
+
+    expect(document.getElementById('welcome')?.hasAttribute('hidden')).toBe(true);
+  });
+
+  it('persists Dismiss across remounts', async () => {
+    const dismiss = document.getElementById('welcome-dismiss') as HTMLButtonElement;
+    dismiss.click();
+    await flushMicrotasks();
+
+    expect(document.getElementById('welcome')?.hasAttribute('hidden')).toBe(true);
+    expect(await onboarding.isDismissed()).toBe(true);
+
+    document.body.innerHTML = bodyFromOptionsHtml();
+    mountOptionsUi(document, {
+      domains: store,
+      ledger,
+      apiKey,
+      disclosure,
+      onboarding,
+    });
+    await flushMicrotasks();
+    expect(document.getElementById('welcome')?.hasAttribute('hidden')).toBe(true);
+  });
+
   it('associates the API key input with its description via aria-describedby (WCAG 1.3.5)', () => {
     const input = document.getElementById('key-input') as HTMLInputElement;
     const describedBy = input.getAttribute('aria-describedby');
@@ -200,7 +285,13 @@ describe('options UI', () => {
   it('removes a domain via its Remove button', async () => {
     await store.enable('example.com');
     document.body.innerHTML = bodyFromOptionsHtml();
-    mountOptionsUi(document, { domains: store, ledger, apiKey, disclosure });
+    mountOptionsUi(document, {
+      domains: store,
+      ledger,
+      apiKey,
+      disclosure,
+      onboarding,
+    });
     await flushMicrotasks();
 
     const removeBtn = document.querySelector(
@@ -246,7 +337,13 @@ describe('options UI', () => {
     });
     // Re-mount so the summary reads the seeded ledger.
     document.body.innerHTML = bodyFromOptionsHtml();
-    mountOptionsUi(document, { domains: store, ledger, apiKey, disclosure });
+    mountOptionsUi(document, {
+      domains: store,
+      ledger,
+      apiKey,
+      disclosure,
+      onboarding,
+    });
     await flushMicrotasks();
 
     const today = document.getElementById('usage-today')!.textContent ?? '';
@@ -276,7 +373,13 @@ describe('options UI', () => {
   it('clears the API key via the Clear button', async () => {
     await apiKey.set('sk-ant-stored');
     document.body.innerHTML = bodyFromOptionsHtml();
-    mountOptionsUi(document, { domains: store, ledger, apiKey, disclosure });
+    mountOptionsUi(document, {
+      domains: store,
+      ledger,
+      apiKey,
+      disclosure,
+      onboarding,
+    });
     await flushMicrotasks();
 
     const clearBtn = document.getElementById('key-clear') as HTMLButtonElement;
@@ -291,7 +394,13 @@ describe('options UI', () => {
   it('saving empty input clears the key', async () => {
     await apiKey.set('sk-ant-existing');
     document.body.innerHTML = bodyFromOptionsHtml();
-    mountOptionsUi(document, { domains: store, ledger, apiKey, disclosure });
+    mountOptionsUi(document, {
+      domains: store,
+      ledger,
+      apiKey,
+      disclosure,
+      onboarding,
+    });
     await flushMicrotasks();
 
     const input = document.getElementById('key-input') as HTMLInputElement;
@@ -334,7 +443,13 @@ describe('options UI', () => {
   it('shows the disabled message once auto counter is exhausted', async () => {
     for (let i = 0; i < 5; i++) await disclosure.recordConfirmation();
     document.body.innerHTML = bodyFromOptionsHtml();
-    mountOptionsUi(document, { domains: store, ledger, apiKey, disclosure });
+    mountOptionsUi(document, {
+      domains: store,
+      ledger,
+      apiKey,
+      disclosure,
+      onboarding,
+    });
     await flushMicrotasks();
     const text = document.getElementById('disclosure-counter')!.textContent ?? '';
     expect(text).toContain('disabled');
@@ -348,7 +463,13 @@ describe('options UI', () => {
       cost_usd: 0.01,
     });
     document.body.innerHTML = bodyFromOptionsHtml();
-    mountOptionsUi(document, { domains: store, ledger, apiKey, disclosure });
+    mountOptionsUi(document, {
+      domains: store,
+      ledger,
+      apiKey,
+      disclosure,
+      onboarding,
+    });
     await flushMicrotasks();
 
     const clearBtn = document.getElementById('clear-ledger') as HTMLButtonElement;

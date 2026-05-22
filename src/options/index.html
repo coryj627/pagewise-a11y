@@ -10,6 +10,33 @@
     <main>
       <h1>Pagewise options</h1>
 
+      <section
+        id="welcome"
+        aria-labelledby="welcome-heading"
+        hidden
+      >
+        <h2 id="welcome-heading">Welcome to Pagewise</h2>
+        <p>Three quick steps to get started:</p>
+        <ol id="welcome-steps">
+          <li id="welcome-step-key" data-complete="false">
+            <strong>Step 1.</strong> Add your Anthropic API key.
+            <span class="welcome-status" aria-live="polite"></span>
+          </li>
+          <li id="welcome-step-domain" data-complete="false">
+            <strong>Step 2.</strong> Enable at least one domain.
+            <span class="welcome-status" aria-live="polite"></span>
+          </li>
+          <li id="welcome-step-run">
+            <strong>Step 3.</strong> Open a tab on an enabled domain,
+            press <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd>, then
+            click <strong>Run</strong>.
+          </li>
+        </ol>
+        <div class="actions">
+          <button type="button" id="welcome-dismiss">Dismiss</button>
+        </div>
+      </section>
+
       <section aria-labelledby="domains-heading">
         <h2 id="domains-heading">Enabled domains</h2>
         <p>

@@ -8,7 +8,7 @@ import { installRouter } from './router';
 const domainStore = wirePermissions();
 installRouter();
 
-chrome.runtime.onInstalled.addListener(() => {
+chrome.runtime.onInstalled.addListener((details) => {
   void configureStorageAccessLevel();
   void chrome.sidePanel
     .setPanelBehavior({ openPanelOnActionClick: true })
@@ -21,6 +21,16 @@ chrome.runtime.onInstalled.addListener(() => {
   void reconcileContentScripts().catch((error: unknown) => {
     console.error('[pagewise] content script reconcile failed', error);
   });
+
+  // First-run onboarding: open the options page so the user can set
+  // their API key and enable a domain. Only fires on fresh install —
+  // updates and Chrome upgrades skip this so we don't surprise the
+  // user every release.
+  if (details.reason === 'install') {
+    void chrome.runtime.openOptionsPage().catch((error: unknown) => {
+      console.error('[pagewise] failed to open options on install', error);
+    });
+  }
 });
 
 chrome.runtime.onStartup.addListener(() => {

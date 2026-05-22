@@ -10,6 +10,7 @@ import {
   type DisclosurePreference,
   type DisclosureMode,
 } from '@/shared/disclosure';
+import type { OnboardingPreference } from '@/shared/onboarding';
 import { formatCostUsd } from '@/shared/pricing';
 
 export interface OptionsServices {
@@ -17,6 +18,7 @@ export interface OptionsServices {
   ledger: CostLedger;
   apiKey: ApiKeyStore;
   disclosure: DisclosurePreference;
+  onboarding: OnboardingPreference;
 }
 
 /**
@@ -32,6 +34,7 @@ export function mountOptionsUi(
   const ledger = services.ledger;
   const apiKey = services.apiKey;
   const disclosure = services.disclosure;
+  const onboarding = services.onboarding;
   const $ = <T extends Element = HTMLElement>(sel: string): T => {
     const el = root.querySelector(sel);
     if (el === null) throw new Error(`mountOptionsUi: missing element ${sel}`);
@@ -60,9 +63,16 @@ export function mountOptionsUi(
     }
   };
 
+  // Forward declaration so renderList / renderKey can re-render the
+  // welcome section after they mutate state.
+  let renderWelcome: () => Promise<void> = async () => undefined;
+
   const renderList = async (): Promise<void> => {
     const hosts = await store.getEnabledDomains();
     list.replaceChildren();
+    // Refresh the welcome card on every domain change so step 2 ticks
+    // green as soon as the user enables their first domain.
+    void renderWelcome();
     if (hosts.length === 0) {
       const li = document.createElement('li');
       li.className = 'empty';
@@ -268,6 +278,8 @@ export function mountOptionsUi(
   const renderKey = async (): Promise<void> => {
     const value = await apiKey.get();
     keyMask.textContent = ApiKeyStore.mask(value);
+    // Step 1 of onboarding becomes Done as soon as the key is set.
+    void renderWelcome();
   };
 
   keyForm.addEventListener('submit', (event) => {
@@ -328,8 +340,49 @@ export function mountOptionsUi(
     });
   }
 
+  // ─────────────────────────────────────────────────────────
+  // Welcome / onboarding section
+  // ─────────────────────────────────────────────────────────
+
+  const welcome = $('#welcome');
+  const welcomeStepKey = $('#welcome-step-key');
+  const welcomeStepDomain = $('#welcome-step-domain');
+  const welcomeStepKeyStatus =
+    welcomeStepKey.querySelector<HTMLElement>('.welcome-status')!;
+  const welcomeStepDomainStatus =
+    welcomeStepDomain.querySelector<HTMLElement>('.welcome-status')!;
+  const welcomeDismiss = $<HTMLButtonElement>('#welcome-dismiss');
+
+  renderWelcome = async (): Promise<void> => {
+    const dismissed = await onboarding.isDismissed();
+    const keySet = await apiKey.isSet();
+    const domains = await store.getEnabledDomains();
+    const domainEnabled = domains.length > 0;
+    const allComplete = keySet && domainEnabled;
+
+    welcomeStepKey.setAttribute('data-complete', String(keySet));
+    welcomeStepDomain.setAttribute('data-complete', String(domainEnabled));
+    welcomeStepKeyStatus.textContent = keySet ? 'Done' : '';
+    welcomeStepDomainStatus.textContent = domainEnabled ? 'Done' : '';
+
+    if (dismissed || allComplete) {
+      welcome.setAttribute('hidden', '');
+    } else {
+      welcome.removeAttribute('hidden');
+    }
+  };
+
+  welcomeDismiss.addEventListener('click', () => {
+    void (async (): Promise<void> => {
+      await onboarding.dismiss();
+      await renderWelcome();
+      announce('Welcome dismissed.', 'info');
+    })();
+  });
+
   void renderList();
   void renderUsage();
   void renderKey();
   void renderDisclosure();
+  void renderWelcome();
 }

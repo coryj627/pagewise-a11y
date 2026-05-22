@@ -5,6 +5,7 @@ import { DomainStore } from '@/shared/domain-store';
 import { CostLedger } from '@/shared/cost-ledger';
 import { ApiKeyStore } from '@/shared/api-key';
 import { DisclosurePreference } from '@/shared/disclosure';
+import { OnboardingPreference } from '@/shared/onboarding';
 import { mountOptionsUi } from './ui';
 
 const storage = new ChromeStorageBackend(chrome.storage.local);
@@ -14,6 +15,7 @@ const services = {
   ledger: new CostLedger(storage),
   apiKey: new ApiKeyStore(storage),
   disclosure: new DisclosurePreference(storage),
+  onboarding: new OnboardingPreference(storage),
 };
 
 if (document.readyState === 'loading') {
