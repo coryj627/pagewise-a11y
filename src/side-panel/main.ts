@@ -17,6 +17,7 @@ import { ChromeStorageBackend } from '@/shared/storage';
 import { ApiKeyStore } from '@/shared/api-key';
 import { CostLedger } from '@/shared/cost-ledger';
 import { DisclosurePreference } from '@/shared/disclosure';
+import { DebugLog } from '@/shared/debug-log';
 import {
   createAnthropicClient,
   DEFAULT_MODEL,
@@ -27,9 +28,11 @@ import { ORIENTATION_SYSTEM_PROMPT } from '@/system-prompts';
 import { summarizePageTool } from '@/schemas/orientation-model';
 
 const storage = new ChromeStorageBackend(chrome.storage.local);
+const sessionStorage = new ChromeStorageBackend(chrome.storage.session);
 const apiKey = new ApiKeyStore(storage);
 const ledger = new CostLedger(storage);
 const disclosure = new DisclosurePreference(storage);
+const debugLog = new DebugLog(sessionStorage, storage);
 
 /** Rough heuristic: orientation responses average ~500 output tokens. */
 const ESTIMATED_OUTPUT_TOKENS = 500;
@@ -66,7 +69,22 @@ async function runAiOrientation(
       })
       .catch((error: unknown) => {
         console.warn('[pagewise] failed to record cost', error);
+        void debugLog.warn('failed to record cost in ledger', {
+          error: error instanceof Error ? error.message : String(error),
+        });
       });
+  } else if (result.kind !== 'ok') {
+    void debugLog.error(`AI orientation failed: ${result.kind}`, {
+      kind: result.kind,
+      message:
+        'message' in result ? result.message : '(no message)',
+      ...(result.kind === 'api_error' && result.status !== undefined
+        ? { status: result.status }
+        : {}),
+      ...(result.kind === 'rate_limited' && result.retryAfterSec !== undefined
+        ? { retryAfterSec: result.retryAfterSec }
+        : {}),
+    });
   }
 
   return result;

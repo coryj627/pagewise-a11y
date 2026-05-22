@@ -6,9 +6,11 @@ import { CostLedger } from '@/shared/cost-ledger';
 import { ApiKeyStore } from '@/shared/api-key';
 import { DisclosurePreference } from '@/shared/disclosure';
 import { OnboardingPreference } from '@/shared/onboarding';
+import { DebugLog } from '@/shared/debug-log';
 import { mountOptionsUi } from './ui';
 
 const storage = new ChromeStorageBackend(chrome.storage.local);
+const sessionStorage = new ChromeStorageBackend(chrome.storage.session);
 const permissions = new ChromePermissionsApi();
 const services = {
   domains: new DomainStore(storage, permissions),
@@ -16,6 +18,7 @@ const services = {
   apiKey: new ApiKeyStore(storage),
   disclosure: new DisclosurePreference(storage),
   onboarding: new OnboardingPreference(storage),
+  debugLog: new DebugLog(sessionStorage, storage),
 };
 
 if (document.readyState === 'loading') {

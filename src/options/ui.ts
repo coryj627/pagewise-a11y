@@ -11,6 +11,7 @@ import {
   type DisclosureMode,
 } from '@/shared/disclosure';
 import type { OnboardingPreference } from '@/shared/onboarding';
+import type { DebugLog } from '@/shared/debug-log';
 import { formatCostUsd } from '@/shared/pricing';
 
 export interface OptionsServices {
@@ -19,6 +20,7 @@ export interface OptionsServices {
   apiKey: ApiKeyStore;
   disclosure: DisclosurePreference;
   onboarding: OnboardingPreference;
+  debugLog: DebugLog;
 }
 
 /**
@@ -35,6 +37,7 @@ export function mountOptionsUi(
   const apiKey = services.apiKey;
   const disclosure = services.disclosure;
   const onboarding = services.onboarding;
+  const debugLog = services.debugLog;
   const $ = <T extends Element = HTMLElement>(sel: string): T => {
     const el = root.querySelector(sel);
     if (el === null) throw new Error(`mountOptionsUi: missing element ${sel}`);
@@ -380,9 +383,52 @@ export function mountOptionsUi(
     })();
   });
 
+  // ─────────────────────────────────────────────────────────
+  // Debug logs section
+  // ─────────────────────────────────────────────────────────
+
+  const debugEnabled = $<HTMLInputElement>('#debug-enabled');
+  const debugStatus = $('#debug-status');
+  const debugClear = $<HTMLButtonElement>('#debug-clear');
+
+  const renderDebug = async (): Promise<void> => {
+    const enabled = await debugLog.isEnabled();
+    const count = await debugLog.getCount();
+    debugEnabled.checked = enabled;
+    if (enabled) {
+      debugStatus.textContent =
+        count === 0
+          ? 'Logging enabled. No entries yet.'
+          : `Logging enabled. ${count.toString()} entries stored this session.`;
+    } else {
+      debugStatus.textContent =
+        count === 0 ? '' : `Logging off. ${count.toString()} stored entries from earlier.`;
+    }
+  };
+
+  debugEnabled.addEventListener('change', () => {
+    void (async (): Promise<void> => {
+      await debugLog.setEnabled(debugEnabled.checked);
+      await renderDebug();
+      announce(
+        debugEnabled.checked ? 'Debug logging enabled.' : 'Debug logging disabled.',
+        'info'
+      );
+    })();
+  });
+
+  debugClear.addEventListener('click', () => {
+    void (async (): Promise<void> => {
+      await debugLog.clear();
+      await renderDebug();
+      announce('Cleared debug logs.', 'ok');
+    })();
+  });
+
   void renderList();
   void renderUsage();
   void renderKey();
   void renderDisclosure();
+  void renderDebug();
   void renderWelcome();
 }

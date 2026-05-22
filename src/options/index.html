@@ -118,6 +118,24 @@
         </form>
       </section>
 
+      <section aria-labelledby="debug-heading">
+        <h2 id="debug-heading">Debug logs</h2>
+        <p>
+          Off by default. When on, Pagewise writes structured log
+          entries to <code>chrome.storage.session</code> (cleared on
+          browser restart). API keys, Authorization headers, and long
+          string runs are redacted before storage. Inspect via Chrome
+          DevTools &rarr; Application &rarr; Storage when you need to
+          file a bug.
+        </p>
+        <label class="toggle">
+          <input type="checkbox" id="debug-enabled" />
+          Enable debug logs for this browser session
+        </label>
+        <p id="debug-status"></p>
+        <button type="button" id="debug-clear">Clear debug logs</button>
+      </section>
+
       <section aria-labelledby="disclosure-heading">
         <h2 id="disclosure-heading">Cost disclosure</h2>
         <p>

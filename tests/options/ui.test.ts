@@ -9,6 +9,7 @@ import { CostLedger } from '@/shared/cost-ledger';
 import { ApiKeyStore } from '@/shared/api-key';
 import { DisclosurePreference } from '@/shared/disclosure';
 import { OnboardingPreference } from '@/shared/onboarding';
+import { DebugLog } from '@/shared/debug-log';
 
 // Vitest is started from the repo root, so a cwd-relative path is stable.
 const HTML_PATH = resolve(process.cwd(), 'src/options/index.html');
@@ -37,6 +38,9 @@ describe('options UI', () => {
   let disclosureStorage: MemoryStorageBackend;
   let onboarding: OnboardingPreference;
   let onboardingStorage: MemoryStorageBackend;
+  let debugLog: DebugLog;
+  let debugSession: MemoryStorageBackend;
+  let debugEnabledStore: MemoryStorageBackend;
 
   beforeEach(async () => {
     document.body.innerHTML = bodyFromOptionsHtml();
@@ -49,12 +53,16 @@ describe('options UI', () => {
     disclosure = new DisclosurePreference(disclosureStorage);
     onboardingStorage = new MemoryStorageBackend();
     onboarding = new OnboardingPreference(onboardingStorage);
+    debugSession = new MemoryStorageBackend();
+    debugEnabledStore = new MemoryStorageBackend();
+    debugLog = new DebugLog(debugSession, debugEnabledStore);
     mountOptionsUi(document, {
       domains: store,
       ledger,
       apiKey,
       disclosure,
       onboarding,
+      debugLog,
     });
     await flushMicrotasks();
   });
@@ -236,6 +244,7 @@ describe('options UI', () => {
       apiKey,
       disclosure,
       onboarding,
+      debugLog,
     });
     await flushMicrotasks();
 
@@ -257,9 +266,55 @@ describe('options UI', () => {
       apiKey,
       disclosure,
       onboarding,
+      debugLog,
     });
     await flushMicrotasks();
     expect(document.getElementById('welcome')?.hasAttribute('hidden')).toBe(true);
+  });
+
+  it('debug log toggle starts unchecked when log is disabled', () => {
+    const toggle = document.getElementById('debug-enabled') as HTMLInputElement;
+    expect(toggle.checked).toBe(false);
+  });
+
+  it('toggling debug-enabled persists and updates the status line', async () => {
+    const toggle = document.getElementById('debug-enabled') as HTMLInputElement;
+    toggle.checked = true;
+    toggle.dispatchEvent(new Event('change', { bubbles: true }));
+    await flushMicrotasks();
+
+    expect(await debugLog.isEnabled()).toBe(true);
+    expect(document.getElementById('debug-status')?.textContent).toContain(
+      'enabled'
+    );
+    const status = document.getElementById('status-region')!;
+    expect(status.textContent).toContain('enabled');
+  });
+
+  it('Clear debug logs empties stored entries and reports it', async () => {
+    await debugLog.setEnabled(true);
+    await debugLog.error('whatever broke');
+    document.body.innerHTML = bodyFromOptionsHtml();
+    mountOptionsUi(document, {
+      domains: store,
+      ledger,
+      apiKey,
+      disclosure,
+      onboarding,
+      debugLog,
+    });
+    await flushMicrotasks();
+    expect(document.getElementById('debug-status')?.textContent).toContain('1');
+
+    (document.getElementById('debug-clear') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    expect(await debugLog.getCount()).toBe(0);
+    expect(document.getElementById('debug-status')?.textContent).toContain(
+      'No entries yet'
+    );
+    const status = document.getElementById('status-region')!;
+    expect(status.textContent).toContain('Cleared');
   });
 
   it('associates the API key input with its description via aria-describedby (WCAG 1.3.5)', () => {
@@ -291,6 +346,7 @@ describe('options UI', () => {
       apiKey,
       disclosure,
       onboarding,
+      debugLog,
     });
     await flushMicrotasks();
 
@@ -343,6 +399,7 @@ describe('options UI', () => {
       apiKey,
       disclosure,
       onboarding,
+      debugLog,
     });
     await flushMicrotasks();
 
@@ -379,6 +436,7 @@ describe('options UI', () => {
       apiKey,
       disclosure,
       onboarding,
+      debugLog,
     });
     await flushMicrotasks();
 
@@ -400,6 +458,7 @@ describe('options UI', () => {
       apiKey,
       disclosure,
       onboarding,
+      debugLog,
     });
     await flushMicrotasks();
 
@@ -449,6 +508,7 @@ describe('options UI', () => {
       apiKey,
       disclosure,
       onboarding,
+      debugLog,
     });
     await flushMicrotasks();
     const text = document.getElementById('disclosure-counter')!.textContent ?? '';
@@ -469,6 +529,7 @@ describe('options UI', () => {
       apiKey,
       disclosure,
       onboarding,
+      debugLog,
     });
     await flushMicrotasks();
 

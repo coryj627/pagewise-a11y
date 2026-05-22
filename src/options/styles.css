@@ -205,6 +205,28 @@ section p {
   display: none;
 }
 
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.toggle input {
+  width: auto;
+}
+
+#debug-status {
+  font-size: var(--font-xs);
+  color: var(--color-text-muted);
+  margin: var(--space-1) 0;
+}
+#debug-status:empty {
+  display: none;
+}
+
+#debug-clear {
+  align-self: flex-start;
+}
+
 #key-current code {
   font-size: var(--font-sm);
 }
