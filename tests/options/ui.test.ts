@@ -5,6 +5,7 @@ import { mountOptionsUi } from '@/options/ui';
 import { DomainStore } from '@/shared/domain-store';
 import { MemoryStorageBackend } from '@/shared/storage';
 import { MemoryPermissionsApi } from '@/shared/permissions';
+import { CostLedger } from '@/shared/cost-ledger';
 
 // Vitest is started from the repo root, so a cwd-relative path is stable.
 const HTML_PATH = resolve(process.cwd(), 'src/options/index.html');
@@ -26,12 +27,14 @@ function flushMicrotasks(): Promise<void> {
 describe('options UI', () => {
   let store: DomainStore;
   let permissions: MemoryPermissionsApi;
+  let ledger: CostLedger;
 
   beforeEach(async () => {
     document.body.innerHTML = bodyFromOptionsHtml();
     permissions = new MemoryPermissionsApi();
     store = new DomainStore(new MemoryStorageBackend(), permissions);
-    mountOptionsUi(document, store);
+    ledger = new CostLedger(new MemoryStorageBackend());
+    mountOptionsUi(document, { domains: store, ledger });
     await flushMicrotasks();
   });
 
@@ -125,7 +128,7 @@ describe('options UI', () => {
   it('removes a domain via its Remove button', async () => {
     await store.enable('example.com');
     document.body.innerHTML = bodyFromOptionsHtml();
-    mountOptionsUi(document, store);
+    mountOptionsUi(document, { domains: store, ledger });
     await flushMicrotasks();
 
     const removeBtn = document.querySelector(
@@ -154,5 +157,51 @@ describe('options UI', () => {
     expect(status.textContent?.toLowerCase()).toContain('denied');
     expect(status.getAttribute('data-tone')).toBe('error');
     expect(await store.isEnabled('example.com')).toBe(false);
+  });
+
+  it('renders empty usage on first mount', () => {
+    const today = document.getElementById('usage-today')!;
+    expect(today.textContent).toContain('0 tokens');
+    expect(today.textContent).toContain('$0.00');
+  });
+
+  it('reflects seeded ledger entries in the summary numbers', async () => {
+    await ledger.record({
+      model: 'claude-sonnet-4-6',
+      input_tokens: 10_000,
+      output_tokens: 500,
+      cost_usd: 0.0375,
+    });
+    // Re-mount so the summary reads the seeded ledger.
+    document.body.innerHTML = bodyFromOptionsHtml();
+    mountOptionsUi(document, { domains: store, ledger });
+    await flushMicrotasks();
+
+    const today = document.getElementById('usage-today')!.textContent ?? '';
+    expect(today).toContain('10,500 tokens');
+    expect(today).toContain('$0.04');
+  });
+
+  it('clears the ledger and updates the summary', async () => {
+    await ledger.record({
+      model: 'claude-sonnet-4-6',
+      input_tokens: 1000,
+      output_tokens: 100,
+      cost_usd: 0.01,
+    });
+    document.body.innerHTML = bodyFromOptionsHtml();
+    mountOptionsUi(document, { domains: store, ledger });
+    await flushMicrotasks();
+
+    const clearBtn = document.getElementById('clear-ledger') as HTMLButtonElement;
+    clearBtn.click();
+    await flushMicrotasks();
+
+    const today = document.getElementById('usage-today')!.textContent ?? '';
+    expect(today).toContain('0 tokens');
+    expect(today).toContain('$0.00');
+    const status = document.getElementById('status-region')!;
+    expect(status.textContent).toContain('Cleared');
+    expect(status.getAttribute('data-tone')).toBe('ok');
   });
 });

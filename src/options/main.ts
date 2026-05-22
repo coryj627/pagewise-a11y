@@ -2,16 +2,20 @@
 import { ChromeStorageBackend } from '@/shared/storage';
 import { ChromePermissionsApi } from '@/shared/permissions';
 import { DomainStore } from '@/shared/domain-store';
+import { CostLedger } from '@/shared/cost-ledger';
 import { mountOptionsUi } from './ui';
 
 const storage = new ChromeStorageBackend(chrome.storage.local);
 const permissions = new ChromePermissionsApi();
-const store = new DomainStore(storage, permissions);
+const services = {
+  domains: new DomainStore(storage, permissions),
+  ledger: new CostLedger(storage),
+};
 
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', () => {
-    mountOptionsUi(document, store);
+    mountOptionsUi(document, services);
   });
 } else {
-  mountOptionsUi(document, store);
+  mountOptionsUi(document, services);
 }

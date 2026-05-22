@@ -58,6 +58,20 @@
           <li class="empty">No domains enabled.</li>
         </ul>
       </section>
+
+      <section aria-labelledby="usage-heading">
+        <h2 id="usage-heading">Usage</h2>
+        <p>
+          BYOK token usage is recorded locally so you can monitor your
+          Anthropic spend. Nothing is sent off-device.
+        </p>
+        <dl id="usage-summary">
+          <dt>Today</dt><dd id="usage-today">0 tokens · $0.00</dd>
+          <dt>This month</dt><dd id="usage-month">0 tokens · $0.00</dd>
+          <dt>All time</dt><dd id="usage-all">0 tokens · $0.00</dd>
+        </dl>
+        <button id="clear-ledger" type="button">Clear ledger</button>
+      </section>
     </main>
     <script type="module" src="./main.ts"></script>
   </body>

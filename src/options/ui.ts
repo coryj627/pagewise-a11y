@@ -3,13 +3,25 @@ import type {
   EnableResult,
   DisableResult,
 } from '@/shared/domain-store';
+import type { CostLedger, UsageSummary } from '@/shared/cost-ledger';
+import { formatCostUsd } from '@/shared/pricing';
+
+export interface OptionsServices {
+  domains: DomainStore;
+  ledger: CostLedger;
+}
 
 /**
  * Mount the options-page UI against the given root document. Exported so
- * tests can swap in a {@link DomainStore} backed by in-memory storage and
- * permissions, mount the UI in jsdom, and drive it directly.
+ * tests can swap in stores backed by in-memory storage and permissions,
+ * mount the UI in jsdom, and drive it directly.
  */
-export function mountOptionsUi(root: ParentNode, store: DomainStore): void {
+export function mountOptionsUi(
+  root: ParentNode,
+  services: OptionsServices
+): void {
+  const store = services.domains;
+  const ledger = services.ledger;
   const $ = <T extends Element = HTMLElement>(sel: string): T => {
     const el = root.querySelector(sel);
     if (el === null) throw new Error(`mountOptionsUi: missing element ${sel}`);
@@ -172,5 +184,34 @@ export function mountOptionsUi(root: ParentNode, store: DomainStore): void {
     void handleEnable(value);
   });
 
+  // ─────────────────────────────────────────────────────────
+  // Usage section
+  // ─────────────────────────────────────────────────────────
+
+  const today = $('#usage-today');
+  const month = $('#usage-month');
+  const all = $('#usage-all');
+  const clearLedgerBtn = $<HTMLButtonElement>('#clear-ledger');
+
+  const fmtSummary = (s: UsageSummary): string => {
+    const tokens = s.input_tokens + s.output_tokens;
+    return `${tokens.toLocaleString()} tokens · ${formatCostUsd(s.cost_usd)}`;
+  };
+
+  const renderUsage = async (): Promise<void> => {
+    today.textContent = fmtSummary(await ledger.summaryToday());
+    month.textContent = fmtSummary(await ledger.summaryThisMonth());
+    all.textContent = fmtSummary(await ledger.summaryAllTime());
+  };
+
+  clearLedgerBtn.addEventListener('click', () => {
+    void (async (): Promise<void> => {
+      await ledger.clear();
+      await renderUsage();
+      announce('Cleared usage ledger.', 'ok');
+    })();
+  });
+
   void renderList();
+  void renderUsage();
 }
