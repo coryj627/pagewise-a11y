@@ -54,8 +54,8 @@ export function mountSidePanelUi(
   };
 
   const status = $('#status-region');
-  const extractBtn = $<HTMLButtonElement>('#extract-btn');
-  const aiExtractBtn = $<HTMLButtonElement>('#ai-extract-btn');
+  const extractBtn = $<HTMLButtonElement>('#run-btn');
+  const aiExtractBtn = $<HTMLButtonElement>('#run-ai-btn');
   const emptyState = $('#empty-state');
   const result = $('#result');
   const resultHeading = $('#result-heading');
@@ -149,7 +149,7 @@ export function mountSidePanelUi(
     emptyState.setAttribute('hidden', '');
     result.removeAttribute('hidden');
     aiExtractBtn.disabled = false;
-    resultHeading.focus();
+    maybeFocus(resultHeading);
   };
 
   const makeJumpButton = (ref: NodeRef): HTMLButtonElement => {
@@ -483,8 +483,26 @@ export function mountSidePanelUi(
       }
     }
 
-    aiResultHeading.focus();
+    maybeFocus(aiResultHeading);
   };
+
+  /**
+   * Move focus to the given element only when the user is "passively
+   * waiting" — focus is in the live status region, on body, or nowhere.
+   * Otherwise leave focus alone so we don't yank the user out of
+   * whatever they were doing. The status region's polite announcement
+   * still fires either way.
+   */
+  function maybeFocus(target: HTMLElement): void {
+    const active = ownerDoc.activeElement;
+    if (
+      active === null ||
+      active === ownerDoc.body ||
+      active.id === 'status-region'
+    ) {
+      target.focus();
+    }
+  }
 
   const makeWhereFromButton = (ref: NodeRef): HTMLAnchorElement => {
     const link = document.createElement('a');
@@ -503,4 +521,80 @@ export function mountSidePanelUi(
   aiExtractBtn.addEventListener('click', () => {
     void handleAiClick();
   });
+
+  // ─────────────────────────────────────────────────────────
+  // Mode selector — arrow keys change selection without running.
+  // Enter on a selected radio dispatches Run (deterministic). The
+  // radiogroup is wired here rather than via fieldset behavior so we
+  // can intercept Enter explicitly.
+  // ─────────────────────────────────────────────────────────
+
+  const modeSelector = root.querySelector<HTMLFieldSetElement>('#mode-selector');
+  if (modeSelector !== null) {
+    modeSelector.addEventListener('keydown', (event: KeyboardEvent) => {
+      if (event.key !== 'Enter') return;
+      const target = event.target as HTMLElement;
+      if (target.tagName !== 'INPUT') return;
+      event.preventDefault();
+      void handleExtract();
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────
+  // F6 / Shift+F6 cycle focus between header / main / footer.
+  // ─────────────────────────────────────────────────────────
+
+  const regions: ReadonlyArray<HTMLElement> = [
+    root.querySelector<HTMLElement>('header')!,
+    root.querySelector<HTMLElement>('main')!,
+    root.querySelector<HTMLElement>('footer')!,
+  ].filter((el): el is HTMLElement => el !== null);
+
+  const ownerDoc = (root instanceof Document
+    ? root
+    : (root as Element).ownerDocument) ?? document;
+
+  ownerDoc.addEventListener('keydown', (event: KeyboardEvent) => {
+    if (event.key !== 'F6') return;
+    event.preventDefault();
+    cycleRegion(regions, ownerDoc, event.shiftKey ? -1 : 1);
+  });
+}
+
+function cycleRegion(
+  regions: ReadonlyArray<HTMLElement>,
+  doc: Document,
+  direction: 1 | -1
+): void {
+  if (regions.length === 0) return;
+  const focused = doc.activeElement;
+  let currentIdx = regions.findIndex(
+    (r) => focused !== null && r.contains(focused)
+  );
+  if (currentIdx === -1) currentIdx = 0;
+  const nextIdx =
+    (currentIdx + direction + regions.length) % regions.length;
+  const next = regions[nextIdx]!;
+  focusFirstIn(next);
+}
+
+function focusFirstIn(region: HTMLElement): void {
+  const FOCUSABLE =
+    'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+  const candidates = region.querySelectorAll<HTMLElement>(FOCUSABLE);
+  if (candidates.length > 0) {
+    candidates[0]!.focus();
+    return;
+  }
+  // No tabbable element — focus the region itself with a temporary
+  // tabindex so screen readers still announce the region change.
+  const original = region.getAttribute('tabindex');
+  region.setAttribute('tabindex', '-1');
+  region.focus();
+  const restore = (): void => {
+    if (original === null) region.removeAttribute('tabindex');
+    else region.setAttribute('tabindex', original);
+    region.removeEventListener('blur', restore);
+  };
+  region.addEventListener('blur', restore, { once: true });
 }

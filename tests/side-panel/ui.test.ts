@@ -179,7 +179,7 @@ describe('side panel UI', () => {
 
   it('runs extraction on click and renders meta + counts', async () => {
     mountWithServices();
-    const btn = document.getElementById('extract-btn') as HTMLButtonElement;
+    const btn = document.getElementById('run-btn') as HTMLButtonElement;
 
     btn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     await flushMicrotasks();
@@ -208,7 +208,7 @@ describe('side panel UI', () => {
       ])
     );
     mountWithServices();
-    (document.getElementById('extract-btn') as HTMLButtonElement).click();
+    (document.getElementById('run-btn') as HTMLButtonElement).click();
     await flushMicrotasks();
 
     const buttons = document.querySelectorAll<HTMLButtonElement>('#jump-list button');
@@ -221,7 +221,7 @@ describe('side panel UI', () => {
   it('reports the empty-candidate case in the jump list', async () => {
     requestExtract = vi.fn(async () => makeOkResponse([]));
     mountWithServices();
-    (document.getElementById('extract-btn') as HTMLButtonElement).click();
+    (document.getElementById('run-btn') as HTMLButtonElement).click();
     await flushMicrotasks();
 
     const text = document.getElementById('jump-list')!.textContent ?? '';
@@ -233,7 +233,7 @@ describe('side panel UI', () => {
       makeOkResponse([ref('n_00010', { role: 'heading', name: 'Intro' })])
     );
     mountWithServices();
-    (document.getElementById('extract-btn') as HTMLButtonElement).click();
+    (document.getElementById('run-btn') as HTMLButtonElement).click();
     await flushMicrotasks();
 
     const jumpBtn = document.querySelector<HTMLButtonElement>('#jump-list button')!;
@@ -260,7 +260,7 @@ describe('side panel UI', () => {
       element: { role: 'button', name: 'B', tag: 'button' },
     }));
     mountWithServices();
-    (document.getElementById('extract-btn') as HTMLButtonElement).click();
+    (document.getElementById('run-btn') as HTMLButtonElement).click();
     await flushMicrotasks();
     document.querySelector<HTMLButtonElement>('#jump-list button')!.click();
     await flushMicrotasks();
@@ -277,7 +277,7 @@ describe('side panel UI', () => {
       reason: 'Could not reach content script.',
     }));
     mountWithServices();
-    (document.getElementById('extract-btn') as HTMLButtonElement).click();
+    (document.getElementById('run-btn') as HTMLButtonElement).click();
     await flushMicrotasks();
 
     const status = document.getElementById('status-region')!;
@@ -292,7 +292,7 @@ describe('side panel UI', () => {
     );
     requestJump = vi.fn(async () => ({ kind: 'error', reason: 'not_resolved' }));
     mountWithServices();
-    (document.getElementById('extract-btn') as HTMLButtonElement).click();
+    (document.getElementById('run-btn') as HTMLButtonElement).click();
     await flushMicrotasks();
     document.querySelector<HTMLButtonElement>('#jump-list button')!.click();
     await flushMicrotasks();
@@ -305,7 +305,7 @@ describe('side panel UI', () => {
   it('shows "no active tab" when getActiveTabId returns null', async () => {
     getActiveTabId = vi.fn(async () => null);
     mountWithServices();
-    (document.getElementById('extract-btn') as HTMLButtonElement).click();
+    (document.getElementById('run-btn') as HTMLButtonElement).click();
     await flushMicrotasks();
 
     expect(requestExtract).not.toHaveBeenCalled();
@@ -316,15 +316,15 @@ describe('side panel UI', () => {
 
   it('AI button is disabled before deterministic extraction has succeeded', () => {
     mountWithServices();
-    const aiBtn = document.getElementById('ai-extract-btn') as HTMLButtonElement;
+    const aiBtn = document.getElementById('run-ai-btn') as HTMLButtonElement;
     expect(aiBtn.disabled).toBe(true);
   });
 
   it('AI button is enabled after extraction succeeds', async () => {
     mountWithServices();
-    (document.getElementById('extract-btn') as HTMLButtonElement).click();
+    (document.getElementById('run-btn') as HTMLButtonElement).click();
     await flushMicrotasks();
-    const aiBtn = document.getElementById('ai-extract-btn') as HTMLButtonElement;
+    const aiBtn = document.getElementById('run-ai-btn') as HTMLButtonElement;
     expect(aiBtn.disabled).toBe(false);
   });
 
@@ -336,9 +336,9 @@ describe('side panel UI', () => {
       usage: { input_tokens: 1000, output_tokens: 200 },
     }));
     mountWithServices();
-    (document.getElementById('extract-btn') as HTMLButtonElement).click();
+    (document.getElementById('run-btn') as HTMLButtonElement).click();
     await flushMicrotasks();
-    (document.getElementById('ai-extract-btn') as HTMLButtonElement).click();
+    (document.getElementById('run-ai-btn') as HTMLButtonElement).click();
     await flushMicrotasks();
 
     expect(runAiOrientation).toHaveBeenCalledOnce();
@@ -354,9 +354,9 @@ describe('side panel UI', () => {
   it('announces "no API key" when runAiOrientation reports it', async () => {
     runAiOrientation = vi.fn(async () => ({ kind: 'no_api_key' }));
     mountWithServices();
-    (document.getElementById('extract-btn') as HTMLButtonElement).click();
+    (document.getElementById('run-btn') as HTMLButtonElement).click();
     await flushMicrotasks();
-    (document.getElementById('ai-extract-btn') as HTMLButtonElement).click();
+    (document.getElementById('run-ai-btn') as HTMLButtonElement).click();
     await flushMicrotasks();
 
     const status = document.getElementById('status-region')!;
@@ -375,9 +375,9 @@ describe('side panel UI', () => {
     });
     requestExtract = vi.fn(async () => sensitiveResponse);
     mountWithServices();
-    (document.getElementById('extract-btn') as HTMLButtonElement).click();
+    (document.getElementById('run-btn') as HTMLButtonElement).click();
     await flushMicrotasks();
-    (document.getElementById('ai-extract-btn') as HTMLButtonElement).click();
+    (document.getElementById('run-ai-btn') as HTMLButtonElement).click();
     await flushMicrotasks();
 
     expect(runAiOrientation).not.toHaveBeenCalled();
@@ -402,9 +402,9 @@ describe('side panel UI', () => {
     });
     requestExtract = vi.fn(async () => sensitiveResponse);
     mountWithServices();
-    (document.getElementById('extract-btn') as HTMLButtonElement).click();
+    (document.getElementById('run-btn') as HTMLButtonElement).click();
     await flushMicrotasks();
-    (document.getElementById('ai-extract-btn') as HTMLButtonElement).click();
+    (document.getElementById('run-ai-btn') as HTMLButtonElement).click();
     await flushMicrotasks();
 
     const sendBtn = Array.from(
@@ -427,9 +427,9 @@ describe('side panel UI', () => {
     });
     requestExtract = vi.fn(async () => sensitiveResponse);
     mountWithServices();
-    (document.getElementById('extract-btn') as HTMLButtonElement).click();
+    (document.getElementById('run-btn') as HTMLButtonElement).click();
     await flushMicrotasks();
-    (document.getElementById('ai-extract-btn') as HTMLButtonElement).click();
+    (document.getElementById('run-ai-btn') as HTMLButtonElement).click();
     await flushMicrotasks();
 
     const cancelBtn = Array.from(
@@ -449,9 +449,9 @@ describe('side panel UI', () => {
       message: 'Slow down',
     }));
     mountWithServices();
-    (document.getElementById('extract-btn') as HTMLButtonElement).click();
+    (document.getElementById('run-btn') as HTMLButtonElement).click();
     await flushMicrotasks();
-    (document.getElementById('ai-extract-btn') as HTMLButtonElement).click();
+    (document.getElementById('run-ai-btn') as HTMLButtonElement).click();
     await flushMicrotasks();
 
     const status = document.getElementById('status-region')!;
@@ -463,9 +463,9 @@ describe('side panel UI', () => {
     shouldPrompt = vi.fn(async () => true);
     estimateCall = vi.fn(async () => ({ tokens: 18400, cost_usd: 0.06 }));
     mountWithServices();
-    (document.getElementById('extract-btn') as HTMLButtonElement).click();
+    (document.getElementById('run-btn') as HTMLButtonElement).click();
     await flushMicrotasks();
-    (document.getElementById('ai-extract-btn') as HTMLButtonElement).click();
+    (document.getElementById('run-ai-btn') as HTMLButtonElement).click();
     await flushMicrotasks();
 
     expect(runAiOrientation).not.toHaveBeenCalled();
@@ -484,9 +484,9 @@ describe('side panel UI', () => {
       usage: null,
     }));
     mountWithServices();
-    (document.getElementById('extract-btn') as HTMLButtonElement).click();
+    (document.getElementById('run-btn') as HTMLButtonElement).click();
     await flushMicrotasks();
-    (document.getElementById('ai-extract-btn') as HTMLButtonElement).click();
+    (document.getElementById('run-ai-btn') as HTMLButtonElement).click();
     await flushMicrotasks();
 
     const sendBtn = Array.from(
@@ -503,9 +503,9 @@ describe('side panel UI', () => {
   it('does NOT record a confirmation when the user cancels the disclosure', async () => {
     shouldPrompt = vi.fn(async () => true);
     mountWithServices();
-    (document.getElementById('extract-btn') as HTMLButtonElement).click();
+    (document.getElementById('run-btn') as HTMLButtonElement).click();
     await flushMicrotasks();
-    (document.getElementById('ai-extract-btn') as HTMLButtonElement).click();
+    (document.getElementById('run-ai-btn') as HTMLButtonElement).click();
     await flushMicrotasks();
 
     const cancelBtn = Array.from(
@@ -518,6 +518,116 @@ describe('side panel UI', () => {
     expect(runAiOrientation).not.toHaveBeenCalled();
   });
 
+  it('renders the mode selector with Orientation enabled and Reader/Q&A disabled', () => {
+    mountWithServices();
+    const orientation = document.getElementById('mode-orientation') as HTMLInputElement;
+    const reader = document.getElementById('mode-reader') as HTMLInputElement;
+    const qa = document.getElementById('mode-qa') as HTMLInputElement;
+    expect(orientation.disabled).toBe(false);
+    expect(orientation.checked).toBe(true);
+    expect(reader.disabled).toBe(true);
+    expect(qa.disabled).toBe(true);
+  });
+
+  it('Enter on the selected radio dispatches Run', async () => {
+    mountWithServices();
+    const orientation = document.getElementById('mode-orientation') as HTMLInputElement;
+    orientation.focus();
+    orientation.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })
+    );
+    await flushMicrotasks();
+
+    expect(requestExtract).toHaveBeenCalledOnce();
+  });
+
+  it('non-Enter key on the radio does NOT dispatch Run', async () => {
+    mountWithServices();
+    const orientation = document.getElementById('mode-orientation') as HTMLInputElement;
+    orientation.focus();
+    orientation.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true })
+    );
+    await flushMicrotasks();
+    expect(requestExtract).not.toHaveBeenCalled();
+  });
+
+  it('F6 moves focus from header to main', () => {
+    mountWithServices();
+    const header = document.querySelector('header')!;
+    // Header has no tabbable elements by default; the cycler falls back to
+    // focusing the region itself. Then F6 should move into main.
+    (header as HTMLElement).setAttribute('tabindex', '-1');
+    (header as HTMLElement).focus();
+    expect(document.activeElement).toBe(header);
+
+    document.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'F6', bubbles: true })
+    );
+    // The first focusable in main is the Orientation radio.
+    expect(document.activeElement?.id).toBe('mode-orientation');
+  });
+
+  it('Shift+F6 moves focus backward from main into header', () => {
+    mountWithServices();
+    const orientation = document.getElementById('mode-orientation') as HTMLElement;
+    orientation.focus();
+
+    document.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'F6', shiftKey: true, bubbles: true })
+    );
+    // Header has no tabbable controls, so focus lands on <header> itself.
+    expect(document.activeElement?.tagName).toBe('HEADER');
+  });
+
+  it('focus moves to the result heading when the user is parked on status-region', async () => {
+    mountWithServices();
+    const status = document.getElementById('status-region') as HTMLElement;
+    status.setAttribute('tabindex', '-1');
+    status.focus();
+    expect(document.activeElement).toBe(status);
+
+    (document.getElementById('run-btn') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    expect(document.activeElement?.id).toBe('result-heading');
+  });
+
+  it('focus does NOT move when the user has navigated to the mode selector', async () => {
+    mountWithServices();
+    const orientation = document.getElementById('mode-orientation') as HTMLInputElement;
+    orientation.focus();
+    expect(document.activeElement).toBe(orientation);
+
+    (document.getElementById('run-btn') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    // User parked on the mode selector — focus should stay there even
+    // though the result rendered.
+    expect(document.activeElement).toBe(orientation);
+  });
+
+  it('focus moves to result heading when nothing is currently focused', async () => {
+    mountWithServices();
+    (document.activeElement as HTMLElement | null)?.blur?.();
+    expect(document.activeElement).toBe(document.body);
+
+    (document.getElementById('run-btn') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    expect(document.activeElement?.id).toBe('result-heading');
+  });
+
+  it('F6 wraps around from footer back to header', () => {
+    mountWithServices();
+    const footer = document.querySelector('footer') as HTMLElement;
+    footer.setAttribute('tabindex', '-1');
+    footer.focus();
+    expect(document.activeElement).toBe(footer);
+
+    document.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'F6', bubbles: true })
+    );
+    expect(document.activeElement?.tagName).toBe('HEADER');
+  });
+
   it('skips the disclosure prompt when shouldPrompt returns false', async () => {
     shouldPrompt = vi.fn(async () => false);
     runAiOrientation = vi.fn(async () => ({
@@ -527,9 +637,9 @@ describe('side panel UI', () => {
       usage: null,
     }));
     mountWithServices();
-    (document.getElementById('extract-btn') as HTMLButtonElement).click();
+    (document.getElementById('run-btn') as HTMLButtonElement).click();
     await flushMicrotasks();
-    (document.getElementById('ai-extract-btn') as HTMLButtonElement).click();
+    (document.getElementById('run-ai-btn') as HTMLButtonElement).click();
     await flushMicrotasks();
 
     expect(estimateCall).not.toHaveBeenCalled();
@@ -544,9 +654,9 @@ describe('side panel UI', () => {
       usage: null,
     }));
     mountWithServices();
-    (document.getElementById('extract-btn') as HTMLButtonElement).click();
+    (document.getElementById('run-btn') as HTMLButtonElement).click();
     await flushMicrotasks();
-    (document.getElementById('ai-extract-btn') as HTMLButtonElement).click();
+    (document.getElementById('run-ai-btn') as HTMLButtonElement).click();
     await flushMicrotasks();
 
     const status = document.getElementById('status-region')!;

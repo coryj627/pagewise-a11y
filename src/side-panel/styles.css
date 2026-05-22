@@ -93,8 +93,30 @@ dd {
 .primary-actions {
   display: flex;
   gap: 0.5rem;
-  margin: 0.5rem 0;
+  margin: 0.5rem 0 1rem;
   flex-wrap: wrap;
+}
+
+#mode-selector {
+  border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+  border-radius: 0.5rem;
+  padding: 0.5rem 1rem;
+  margin: 1rem 0;
+}
+#mode-selector legend {
+  font-weight: 600;
+  padding: 0 0.25rem;
+}
+#mode-selector label {
+  display: block;
+  margin: 0.25rem 0;
+}
+#mode-selector label:has(input:disabled) {
+  opacity: 0.6;
+}
+#mode-selector .hint {
+  font-size: 0.8125rem;
+  opacity: 0.75;
 }
 
 #confirm-region {

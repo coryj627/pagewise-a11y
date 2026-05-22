@@ -13,16 +13,31 @@
     </header>
     <main id="panel-main">
       <p id="empty-state">
-        Press <strong>Get orientation</strong> to scan the current tab.
-        Pagewise will list the page's headings, landmarks, forms, and
-        primary actions, with jump buttons that move screen-reader focus
-        to the host page.
+        Pagewise scans the current tab and lists its headings, landmarks,
+        forms, and primary actions. Pick a mode, then press
+        <strong>Run</strong>. Jump targets move screen-reader focus to the
+        host page.
       </p>
+
+      <fieldset id="mode-selector" role="radiogroup" aria-labelledby="mode-legend">
+        <legend id="mode-legend">Mode</legend>
+        <label>
+          <input type="radio" name="mode" value="orientation" id="mode-orientation" checked />
+          Orientation
+        </label>
+        <label>
+          <input type="radio" name="mode" value="reader" id="mode-reader" disabled />
+          Reader <span class="hint">(Phase 3 — not yet)</span>
+        </label>
+        <label>
+          <input type="radio" name="mode" value="qa" id="mode-qa" disabled />
+          Q&amp;A <span class="hint">(Phase 4 — not yet)</span>
+        </label>
+      </fieldset>
+
       <div class="primary-actions">
-        <button id="extract-btn" type="button">Get orientation</button>
-        <button id="ai-extract-btn" type="button" disabled>
-          Get AI orientation
-        </button>
+        <button id="run-btn" type="button">Run</button>
+        <button id="run-ai-btn" type="button" disabled>Run with AI</button>
       </div>
 
       <div
@@ -67,7 +82,7 @@
       </section>
     </main>
     <footer>
-      <p>Phase 0 — AI Orientation is the only mode wired so far.</p>
+      <p>Phase 0 — Orientation is wired; Reader and Q&amp;A coming.</p>
     </footer>
     <script type="module" src="./main.ts"></script>
   </body>
