@@ -86,3 +86,39 @@ export const PanelRpcRequestSchema = z.discriminatedUnion('type', [
   PanelJumpRequestSchema,
 ]);
 export type PanelRpcRequest = z.infer<typeof PanelRpcRequestSchema>;
+
+// ─────────────────────────────────────────────────────────
+// Content → service worker push notifications (no response expected).
+// The SW augments each with the sender tabId and re-broadcasts as a
+// panel notification.
+// ─────────────────────────────────────────────────────────
+
+const PageChangeReasonSchema = z.enum([
+  'dom_mutation',
+  'url_pushstate',
+  'url_replacestate',
+  'url_popstate',
+  'url_hashchange',
+]);
+
+export const ContentEventMessageSchema = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('content:pageChanged'),
+    reason: PageChangeReasonSchema,
+  }),
+]);
+export type ContentEventMessage = z.infer<typeof ContentEventMessageSchema>;
+
+// ─────────────────────────────────────────────────────────
+// Service worker → side panel broadcasts. The panel filters by tabId so
+// it only reacts to events on its bound tab.
+// ─────────────────────────────────────────────────────────
+
+export const PanelNotificationMessageSchema = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('panel:pageChanged'),
+    tabId: z.number().int(),
+    reason: PageChangeReasonSchema,
+  }),
+]);
+export type PanelNotificationMessage = z.infer<typeof PanelNotificationMessageSchema>;

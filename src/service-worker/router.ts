@@ -2,8 +2,10 @@ import {
   PanelRpcRequestSchema,
   ExtractResponseSchema,
   JumpResponseSchema,
+  ContentEventMessageSchema,
   type ExtractResponse,
   type JumpResponse,
+  type PanelNotificationMessage,
 } from '@/shared/messages-rpc';
 import { setCache, clearCache } from './cache';
 
@@ -15,24 +17,44 @@ import { setCache, clearCache } from './cache';
  * don't have to re-walk the DOM.
  */
 export function installRouter(): void {
-  chrome.runtime.onMessage.addListener((rawMessage, _sender, sendResponse) => {
-    const parsed = PanelRpcRequestSchema.safeParse(rawMessage);
-    if (!parsed.success) return false;
-
-    switch (parsed.data.type) {
-      case 'panel:extract': {
-        handleExtract(parsed.data.tabId)
-          .then(sendResponse)
-          .catch((error: unknown) => sendResponse(asExtractError(error)));
-        return true;
-      }
-      case 'panel:jump': {
-        handleJump(parsed.data.tabId, parsed.data.nodeRef)
-          .then(sendResponse)
-          .catch((error: unknown) => sendResponse(asJumpError(error)));
-        return true;
+  chrome.runtime.onMessage.addListener((rawMessage, sender, sendResponse) => {
+    // Panel → SW RPC.
+    const rpcParsed = PanelRpcRequestSchema.safeParse(rawMessage);
+    if (rpcParsed.success) {
+      switch (rpcParsed.data.type) {
+        case 'panel:extract': {
+          handleExtract(rpcParsed.data.tabId)
+            .then(sendResponse)
+            .catch((error: unknown) => sendResponse(asExtractError(error)));
+          return true;
+        }
+        case 'panel:jump': {
+          handleJump(rpcParsed.data.tabId, rpcParsed.data.nodeRef)
+            .then(sendResponse)
+            .catch((error: unknown) => sendResponse(asJumpError(error)));
+          return true;
+        }
       }
     }
+
+    // Content → SW push (page changed).
+    const eventParsed = ContentEventMessageSchema.safeParse(rawMessage);
+    if (eventParsed.success && eventParsed.data.type === 'content:pageChanged') {
+      const tabId = sender.tab?.id;
+      if (tabId !== undefined) {
+        clearCache(tabId);
+        const notification: PanelNotificationMessage = {
+          type: 'panel:pageChanged',
+          tabId,
+          reason: eventParsed.data.reason,
+        };
+        // Broadcast to all extension pages; the side panel filters by tabId.
+        void chrome.runtime.sendMessage(notification).catch(() => undefined);
+      }
+      return false;
+    }
+
+    return false;
   });
 
   // Clear cache when a tab navigates so stale PageModels aren't returned.

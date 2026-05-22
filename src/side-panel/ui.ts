@@ -24,6 +24,11 @@ export interface DisclosureService {
   recordConfirmation(): Promise<void>;
 }
 
+export type PageChangedHandler = (event: {
+  tabId: number;
+  reason: string;
+}) => void;
+
 export interface SidePanelServices {
   getActiveTabId(): Promise<number | null>;
   requestExtract(tabId: number): Promise<ExtractResponse>;
@@ -35,17 +40,25 @@ export interface SidePanelServices {
     input: AiOrientationServiceInput
   ): Promise<{ tokens: number; cost_usd: number }>;
   disclosure: DisclosureService;
+  /**
+   * Subscribe to "the page bound to this tab changed" notifications.
+   * Returns an unsubscribe function. Used by the panel to mark a cached
+   * result stale when the content script reports DOM/URL changes.
+   */
+  subscribePageChanged(handler: PageChangedHandler): () => void;
 }
 
 interface PanelState {
   lastExtract: Extract<ExtractResponse, { kind: 'ok' }> | null;
+  boundTabId: number | null;
+  stale: boolean;
 }
 
 export function mountSidePanelUi(
   root: ParentNode,
   services: SidePanelServices
 ): void {
-  const state: PanelState = { lastExtract: null };
+  const state: PanelState = { lastExtract: null, boundTabId: null, stale: false };
 
   const $ = <T extends HTMLElement = HTMLElement>(sel: string): T => {
     const el = root.querySelector(sel);
@@ -57,6 +70,7 @@ export function mountSidePanelUi(
   const extractBtn = $<HTMLButtonElement>('#run-btn');
   const aiExtractBtn = $<HTMLButtonElement>('#run-ai-btn');
   const emptyState = $('#empty-state');
+  const staleNotice = $('#stale-notice');
   const result = $('#result');
   const resultHeading = $('#result-heading');
   const pageMeta = $('#page-meta');
@@ -183,12 +197,38 @@ export function mountSidePanelUi(
         return;
       }
       state.lastExtract = response;
+      state.boundTabId = tabId;
+      clearStale();
       announce('Extraction ready.', 'ok');
       renderDeterministicResult(response);
     } finally {
       extractBtn.disabled = false;
     }
   };
+
+  function markStale(): void {
+    if (state.lastExtract === null) return;
+    state.stale = true;
+    result.setAttribute('data-stale', 'true');
+    aiResult.setAttribute('data-stale', 'true');
+    staleNotice.removeAttribute('hidden');
+    extractBtn.textContent = 'Re-extract';
+    announce('Page changed since this was captured.', 'info');
+  }
+
+  function clearStale(): void {
+    state.stale = false;
+    result.removeAttribute('data-stale');
+    aiResult.removeAttribute('data-stale');
+    staleNotice.setAttribute('hidden', '');
+    extractBtn.textContent = 'Run';
+  }
+
+  services.subscribePageChanged((event) => {
+    if (state.boundTabId === null) return;
+    if (event.tabId !== state.boundTabId) return;
+    markStale();
+  });
 
   const handleJump = async (
     nodeRef: NodeRef,

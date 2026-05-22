@@ -3,11 +3,13 @@ import {
   type SidePanelServices,
   type AiOrientationServiceInput,
   type AiOrientationServiceResult,
+  type PageChangedHandler,
 } from './ui';
 import type { NodeRef } from '@/schemas/node-ref';
 import {
   ExtractResponseSchema,
   JumpResponseSchema,
+  PanelNotificationMessageSchema,
   type ExtractResponse,
   type JumpResponse,
 } from '@/shared/messages-rpc';
@@ -122,6 +124,16 @@ const services: SidePanelServices = {
   disclosure: {
     shouldPrompt: () => disclosure.shouldPrompt(),
     recordConfirmation: () => disclosure.recordConfirmation(),
+  },
+  subscribePageChanged(handler: PageChangedHandler): () => void {
+    const listener = (raw: unknown): void => {
+      const parsed = PanelNotificationMessageSchema.safeParse(raw);
+      if (!parsed.success) return;
+      if (parsed.data.type !== 'panel:pageChanged') return;
+      handler({ tabId: parsed.data.tabId, reason: parsed.data.reason });
+    };
+    chrome.runtime.onMessage.addListener(listener);
+    return () => chrome.runtime.onMessage.removeListener(listener);
   },
 };
 

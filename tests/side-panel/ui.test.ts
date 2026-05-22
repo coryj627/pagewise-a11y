@@ -142,6 +142,7 @@ describe('side panel UI', () => {
   >;
   let shouldPrompt: Mock<() => Promise<boolean>>;
   let recordConfirmation: Mock<() => Promise<void>>;
+  let pageChangedHandlers: Array<(event: { tabId: number; reason: string }) => void>;
 
   beforeEach(() => {
     document.body.innerHTML = bodyFromSidePanelHtml();
@@ -157,6 +158,7 @@ describe('side panel UI', () => {
     estimateCall = vi.fn(async () => ({ tokens: 18400, cost_usd: 0.06 }));
     shouldPrompt = vi.fn(async () => false);
     recordConfirmation = vi.fn(async () => {});
+    pageChangedHandlers = [];
   });
 
   function mountWithServices(): void {
@@ -167,8 +169,19 @@ describe('side panel UI', () => {
       runAiOrientation,
       estimateCall,
       disclosure: { shouldPrompt, recordConfirmation },
+      subscribePageChanged(handler) {
+        pageChangedHandlers.push(handler);
+        return () => {
+          const i = pageChangedHandlers.indexOf(handler);
+          if (i >= 0) pageChangedHandlers.splice(i, 1);
+        };
+      },
     };
     mountSidePanelUi(document, services);
+  }
+
+  function emitPageChanged(event: { tabId: number; reason: string }): void {
+    for (const handler of pageChangedHandlers) handler(event);
   }
 
   it('shows the empty state on first render and hides the result block', () => {
@@ -613,6 +626,58 @@ describe('side panel UI', () => {
     (document.getElementById('run-btn') as HTMLButtonElement).click();
     await flushMicrotasks();
     expect(document.activeElement?.id).toBe('result-heading');
+  });
+
+  it('marks the result stale when a pageChanged event arrives for the bound tab', async () => {
+    mountWithServices();
+    (document.getElementById('run-btn') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    expect(document.getElementById('result')?.hasAttribute('hidden')).toBe(false);
+
+    emitPageChanged({ tabId: 42, reason: 'url_pushstate' });
+
+    expect(document.getElementById('result')?.getAttribute('data-stale')).toBe('true');
+    expect(
+      document.getElementById('stale-notice')?.hasAttribute('hidden')
+    ).toBe(false);
+    expect(
+      (document.getElementById('run-btn') as HTMLButtonElement).textContent
+    ).toBe('Re-extract');
+    expect(document.getElementById('status-region')?.textContent).toContain(
+      'Page changed'
+    );
+  });
+
+  it('ignores pageChanged events for a different tab', async () => {
+    mountWithServices();
+    (document.getElementById('run-btn') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    emitPageChanged({ tabId: 999, reason: 'dom_mutation' });
+
+    expect(document.getElementById('result')?.hasAttribute('data-stale')).toBe(false);
+    expect(
+      document.getElementById('stale-notice')?.hasAttribute('hidden')
+    ).toBe(true);
+  });
+
+  it('clears stale state on the next successful extract', async () => {
+    mountWithServices();
+    (document.getElementById('run-btn') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    emitPageChanged({ tabId: 42, reason: 'dom_mutation' });
+    expect(document.getElementById('result')?.getAttribute('data-stale')).toBe('true');
+
+    (document.getElementById('run-btn') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    expect(document.getElementById('result')?.hasAttribute('data-stale')).toBe(false);
+    expect(
+      document.getElementById('stale-notice')?.hasAttribute('hidden')
+    ).toBe(true);
+    expect(
+      (document.getElementById('run-btn') as HTMLButtonElement).textContent
+    ).toBe('Run');
   });
 
   it('F6 wraps around from footer back to header', () => {
