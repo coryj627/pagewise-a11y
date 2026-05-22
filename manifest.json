@@ -20,15 +20,6 @@
 
   "options_page": "src/options/index.html",
 
-  "content_scripts": [
-    {
-      "matches": ["<all_urls>"],
-      "js": ["src/content/main.ts"],
-      "run_at": "document_idle",
-      "all_frames": false
-    }
-  ],
-
   "permissions": [
     "storage",
     "sidePanel",
@@ -53,5 +44,12 @@
 
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://api.anthropic.com; frame-ancestors 'none'"
-  }
+  },
+
+  "web_accessible_resources": [
+    {
+      "resources": ["content-script.js"],
+      "matches": ["<all_urls>"]
+    }
+  ]
 }

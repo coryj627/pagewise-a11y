@@ -1,5 +1,5 @@
 import { configureStorageAccessLevel } from './access-level';
-import { wirePermissions } from './permissions';
+import { wirePermissions, reconcileContentScripts } from './permissions';
 import { installRouter } from './router';
 
 // Subscriptions must be attached at the top level so they re-register
@@ -18,10 +18,16 @@ chrome.runtime.onInstalled.addListener(() => {
   void domainStore.syncWithPermissions().catch((error: unknown) => {
     console.error('[pagewise] startup sync failed', error);
   });
+  void reconcileContentScripts().catch((error: unknown) => {
+    console.error('[pagewise] content script reconcile failed', error);
+  });
 });
 
 chrome.runtime.onStartup.addListener(() => {
   void domainStore.syncWithPermissions().catch((error: unknown) => {
     console.error('[pagewise] onStartup sync failed', error);
+  });
+  void reconcileContentScripts().catch((error: unknown) => {
+    console.error('[pagewise] onStartup content script reconcile failed', error);
   });
 });
