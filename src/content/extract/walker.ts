@@ -4,6 +4,11 @@ import { RefRegistry } from '../refs/registry';
 import { hashName, hashText, NodeIdGenerator } from '../refs/hash';
 import { computeName } from '../dom-accessibility/compute-name';
 import { computeRole } from '../dom-accessibility/compute-role';
+import { computeDescription } from '../dom-accessibility/compute-description';
+import {
+  collectAriaRelationships,
+  type AriaRelationshipDomIds,
+} from '../dom-accessibility/relationships';
 import { isHidden } from '../dom-accessibility/hiddenness';
 
 /**
@@ -36,6 +41,17 @@ const HEADING_LEVELS: Record<string, number> = {
   h6: 6,
 };
 
+const LANDMARK_ROLES = new Set([
+  'banner',
+  'complementary',
+  'contentinfo',
+  'form',
+  'main',
+  'navigation',
+  'region',
+  'search',
+]);
+
 export interface ExtractTreeOptions {
   /** UUID for this extraction. Generated when omitted. */
   extractionId?: string;
@@ -54,12 +70,29 @@ export interface ExtractTreeResult {
   extractionId: string;
 }
 
+interface HeadingFrame {
+  level: number;
+  refId: string;
+}
+
+interface LandmarkFrame {
+  refId: string;
+}
+
 interface WalkContext {
   registry: RefRegistry;
   ids: NodeIdGenerator;
   extractionId: string;
   view: Window | null;
   frameRef: string;
+  /** Flat outline stack — pushed on every heading entry. */
+  headingStack: HeadingFrame[];
+  /** DOM-nested landmark stack — pushed on enter, popped on exit. */
+  landmarkStack: LandmarkFrame[];
+  /** DOM id → NodeRef id, filled lazily as elements get assigned ids. */
+  domIdToRefId: Map<string, string>;
+  /** Raw aria-* relationship DOM ids, resolved to NodeRef ids after walk. */
+  rawAriaByRefId: Map<string, AriaRelationshipDomIds>;
 }
 
 /**
@@ -67,6 +100,11 @@ interface WalkContext {
  * {@link RefRegistry} mapping every captured element to its assigned
  * {@link NodeRef.id}. The walker skips hidden subtrees and non-content
  * tags (script/style/etc.) entirely — those elements never receive a ref.
+ *
+ * Builds heading_path (flat outline) and landmark (nearest enclosing
+ * landmark) relationships inline. aria-labelledby / aria-describedby /
+ * aria-controls / aria-owns are collected as raw DOM ids during walk and
+ * resolved to NodeRef ids in a second pass once every element has an id.
  */
 export function extractTree(
   rootElement: Element,
@@ -81,6 +119,10 @@ export function extractTree(
     extractionId,
     view,
     frameRef: options.frameRef ?? 'top',
+    headingStack: [],
+    landmarkStack: [],
+    domIdToRefId: new Map(),
+    rawAriaByRefId: new Map(),
   };
 
   const root = walk(rootElement, ctx);
@@ -89,6 +131,8 @@ export function extractTree(
       `extractTree: root element <${rootElement.tagName.toLowerCase()}> is hidden or non-content`
     );
   }
+
+  resolveAriaRelationships(root, ctx);
 
   return { root, registry, extractionId };
 }
@@ -100,15 +144,60 @@ function walk(element: Element, ctx: WalkContext): PageElement | null {
 
   const { role, source: roleSource } = computeRole(element);
   const { name, source: nameSource } = computeName(element);
+  const description = computeDescription(element);
   const text = directTextContent(element);
+  const level = HEADING_LEVELS[tag];
 
+  // For a heading element, pop the stack BEFORE snapshotting so a sibling
+  // H2 doesn't see the previous H2 in its own path. Non-heading elements
+  // snapshot directly from the current stack.
+  if (level !== undefined) {
+    while (
+      ctx.headingStack.length > 0 &&
+      ctx.headingStack[ctx.headingStack.length - 1]!.level >= level
+    ) {
+      ctx.headingStack.pop();
+    }
+  }
+  const ownHeadingPath = ctx.headingStack.map((f) => f.refId);
+  const ownLandmark =
+    ctx.landmarkStack.length > 0
+      ? ctx.landmarkStack[ctx.landmarkStack.length - 1]!.refId
+      : null;
+
+  // Assign id up-front so descendants can capture it on the stack.
+  const id = ctx.ids.next();
+
+  // Push self onto the appropriate stacks for descendants to see.
+  if (level !== undefined) {
+    ctx.headingStack.push({ level, refId: id });
+  }
+  const pushedLandmark = LANDMARK_ROLES.has(role);
+  if (pushedLandmark) {
+    ctx.landmarkStack.push({ refId: id });
+  }
+
+  // Recurse — children may use the just-pushed stacks.
   const children: PageElement[] = [];
   for (const child of Array.from(element.children)) {
     const childEl = walk(child, ctx);
     if (childEl !== null) children.push(childEl);
   }
 
-  const id = ctx.ids.next();
+  // Landmark scope ends when we leave this subtree. Heading scope is flat
+  // (outline-based) and intentionally NOT popped here.
+  if (pushedLandmark) ctx.landmarkStack.pop();
+
+  // Track this element's DOM id (if any) so the second pass can resolve
+  // aria-* references that point to it.
+  if (element.id !== '') ctx.domIdToRefId.set(element.id, id);
+
+  // Stash raw aria relationships for the second pass.
+  const rawAria = collectAriaRelationships(element);
+  if (hasAnyAriaRel(rawAria)) ctx.rawAriaByRefId.set(id, rawAria);
+
+  ctx.registry.set(id, element);
+
   const ref: NodeRef = {
     id,
     extraction_id: ctx.extractionId,
@@ -121,7 +210,6 @@ function walk(element: Element, ctx: WalkContext): PageElement | null {
     },
     ...(maybeBbox(element) ?? {}),
   };
-  ctx.registry.set(id, element);
 
   const pageElement: PageElement = {
     ref,
@@ -135,10 +223,12 @@ function walk(element: Element, ctx: WalkContext): PageElement | null {
     pageElement.name = name;
     pageElement.name_source = nameSource;
   }
+  if (description !== '') {
+    pageElement.description = description;
+  }
   if (text !== '') {
     pageElement.text = text;
   }
-  const level = HEADING_LEVELS[tag];
   if (level !== undefined) {
     pageElement.level = level;
   }
@@ -146,7 +236,60 @@ function walk(element: Element, ctx: WalkContext): PageElement | null {
     pageElement.href = element.getAttribute('href') ?? undefined;
   }
 
+  const relationships: NonNullable<PageElement['relationships']> = {};
+  if (ownHeadingPath.length > 0) relationships.heading_path = ownHeadingPath;
+  if (ownLandmark !== null) relationships.landmark = ownLandmark;
+  if (Object.keys(relationships).length > 0) {
+    pageElement.relationships = relationships;
+  }
+
   return pageElement;
+}
+
+function resolveAriaRelationships(root: PageElement, ctx: WalkContext): void {
+  const resolveIds = (rawIds: ReadonlyArray<string>): string[] => {
+    const out: string[] = [];
+    for (const domId of rawIds) {
+      const refId = ctx.domIdToRefId.get(domId);
+      if (refId !== undefined) out.push(refId);
+    }
+    return out;
+  };
+
+  const visit = (el: PageElement): void => {
+    const raw = ctx.rawAriaByRefId.get(el.ref.id);
+    if (raw !== undefined) {
+      const rel = el.relationships ?? {};
+      if (raw.labelled_by !== undefined) {
+        const resolved = resolveIds(raw.labelled_by);
+        if (resolved.length > 0) rel.labelled_by = resolved;
+      }
+      if (raw.described_by !== undefined) {
+        const resolved = resolveIds(raw.described_by);
+        if (resolved.length > 0) rel.described_by = resolved;
+      }
+      if (raw.controls !== undefined) {
+        const resolved = resolveIds(raw.controls);
+        if (resolved.length > 0) rel.controls = resolved;
+      }
+      if (raw.owns !== undefined) {
+        const resolved = resolveIds(raw.owns);
+        if (resolved.length > 0) rel.owns = resolved;
+      }
+      if (Object.keys(rel).length > 0) el.relationships = rel;
+    }
+    for (const child of el.children) visit(child);
+  };
+  visit(root);
+}
+
+function hasAnyAriaRel(rels: AriaRelationshipDomIds): boolean {
+  return (
+    rels.labelled_by !== undefined ||
+    rels.described_by !== undefined ||
+    rels.controls !== undefined ||
+    rels.owns !== undefined
+  );
 }
 
 /**
