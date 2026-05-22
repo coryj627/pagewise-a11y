@@ -10,6 +10,7 @@ export const CapabilityReasonSchema = z.enum([
   'login_required',
   'sensitive_page',
   'large_page_truncated',
+  'noai_opt_out',
 ]);
 
 export type CapabilityReason = z.infer<typeof CapabilityReasonSchema>;

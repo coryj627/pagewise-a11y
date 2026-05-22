@@ -169,9 +169,24 @@ export function mountSidePanelUi(
 
     emptyState.setAttribute('hidden', '');
     result.removeAttribute('hidden');
-    aiExtractBtn.disabled = false;
+    const optedOut = response.capability.reasons.includes('noai_opt_out');
+    aiExtractBtn.disabled = optedOut;
+    if (optedOut) {
+      aiExtractBtn.setAttribute(
+        'title',
+        'This page opted out of AI processing via a meta-robots noai tag.'
+      );
+    } else {
+      aiExtractBtn.removeAttribute('title');
+    }
     maybeFocus(resultHeading);
   };
+
+  function isNoAiOptedOut(): boolean {
+    return (
+      state.lastExtract?.capability.reasons.includes('noai_opt_out') ?? false
+    );
+  }
 
   const makeJumpButton = (ref: NodeRef): HTMLButtonElement => {
     const button = document.createElement('button');
@@ -274,6 +289,13 @@ export function mountSidePanelUi(
   const handleAiClick = async (): Promise<void> => {
     if (state.lastExtract === null) {
       announce('Run a deterministic extraction first.', 'error');
+      return;
+    }
+    if (isNoAiOptedOut()) {
+      announce(
+        'This page opted out of AI processing via a meta-robots noai tag. Pagewise will not send it to Anthropic.',
+        'error'
+      );
       return;
     }
     const sensitivity = state.lastExtract.sensitivity;
@@ -382,6 +404,16 @@ export function mountSidePanelUi(
 
   const runAiCall = async (): Promise<void> => {
     if (state.lastExtract === null) return;
+    // Defense in depth: every entry into the AI flow re-checks noai.
+    // handleAiClick already refuses; this catches the retry-button path.
+    if (isNoAiOptedOut()) {
+      announce(
+        'This page opted out of AI processing via a meta-robots noai tag.',
+        'error'
+      );
+      clearRetry();
+      return;
+    }
     clearRetry();
     announce('Asking Claude…', 'info');
     aiExtractBtn.disabled = true;

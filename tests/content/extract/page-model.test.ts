@@ -228,6 +228,20 @@ describe('extractPageModel — deterministic candidates ordering', () => {
     expect(linkCount).toBeGreaterThanOrEqual(1);
   });
 
+  it('flags noai_opt_out when the page has <meta name="robots" content="noai">', () => {
+    document.head.innerHTML = '<meta name="robots" content="noai" />';
+    document.body.innerHTML = '<main><p>x</p></main>';
+    const { capability } = extractPageModel(document);
+    expect(capability.reasons).toContain('noai_opt_out');
+  });
+
+  it('does NOT flag noai_opt_out for ordinary robots directives', () => {
+    document.head.innerHTML = '<meta name="robots" content="noindex,nofollow" />';
+    document.body.innerHTML = '<main><p>x</p></main>';
+    const { capability } = extractPageModel(document);
+    expect(capability.reasons).not.toContain('noai_opt_out');
+  });
+
   it('uses the provided extractionId and timestamp', () => {
     document.body.innerHTML = '<main></main>';
     const fixed = new Date('2026-05-21T12:00:00.000Z');

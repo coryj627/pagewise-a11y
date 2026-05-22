@@ -16,6 +16,7 @@ import {
   buildSensitiveDomainRedaction,
 } from './sensitivity';
 import { pickDeterministicCandidates } from './pre-rank';
+import { detectNoAi } from './noai';
 
 const LANDMARK_ROLES = new Set([
   'banner',
@@ -118,10 +119,16 @@ export function extractPageModel(
     deterministic_candidates: deterministicCandidates,
   };
 
+  const capability = buildCapabilityReport(all, root);
+  const noai = detectNoAi(doc);
+  if (noai !== null && !capability.reasons.includes('noai_opt_out')) {
+    capability.reasons = [...capability.reasons, 'noai_opt_out'];
+  }
+
   return {
     pageModel,
     registry,
-    capability: buildCapabilityReport(all, root),
+    capability,
     sensitivity,
   };
 }

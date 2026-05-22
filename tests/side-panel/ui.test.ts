@@ -575,6 +575,51 @@ describe('side panel UI', () => {
     ).toBe(true);
   });
 
+  it('disables Run with AI when the extraction reports noai_opt_out', async () => {
+    const noaiResponse = makeOkResponse([], {
+      sensitivity: SENSITIVITY,
+    });
+    if (noaiResponse.kind === 'ok') {
+      noaiResponse.capability = {
+        ...noaiResponse.capability,
+        reasons: [...noaiResponse.capability.reasons, 'noai_opt_out'],
+      };
+    }
+    requestExtract = vi.fn(async () => noaiResponse);
+    mountWithServices();
+    (document.getElementById('run-btn') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    const aiBtn = document.getElementById('run-ai-btn') as HTMLButtonElement;
+    expect(aiBtn.disabled).toBe(true);
+    expect(aiBtn.getAttribute('title')).toContain('opted out');
+  });
+
+  it('refuses to call Claude when noai_opt_out is flagged, even if AI button is forced enabled', async () => {
+    const noaiResponse = makeOkResponse([], { sensitivity: SENSITIVITY });
+    if (noaiResponse.kind === 'ok') {
+      noaiResponse.capability = {
+        ...noaiResponse.capability,
+        reasons: [...noaiResponse.capability.reasons, 'noai_opt_out'],
+      };
+    }
+    requestExtract = vi.fn(async () => noaiResponse);
+    mountWithServices();
+    (document.getElementById('run-btn') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    // Force-enable + click to simulate any defensive bypass.
+    const aiBtn = document.getElementById('run-ai-btn') as HTMLButtonElement;
+    aiBtn.disabled = false;
+    aiBtn.click();
+    await flushMicrotasks();
+
+    expect(runAiOrientation).not.toHaveBeenCalled();
+    const status = document.getElementById('status-region')!;
+    expect(status.textContent?.toLowerCase()).toContain('noai');
+    expect(status.getAttribute('data-tone')).toBe('error');
+  });
+
   it('does NOT surface Retry on no_api_key', async () => {
     runAiOrientation = vi.fn(async () => ({ kind: 'no_api_key' }));
     mountWithServices();
