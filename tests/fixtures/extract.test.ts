@@ -93,15 +93,20 @@ describe('F2 — search results', () => {
 });
 
 describe('F3 — div-soup app', () => {
-  it('falls back to body as main_content and flags no_main_region', () => {
+  it('flags no_main_region (page genuinely lacks the landmark) but picks a readability-scored content container as main_content', () => {
     setupFixture('F3-div-soup');
     const { pageModel, capability } = extractPageModel(document);
 
-    expect(pageModel.main_content.tag).toBe('body');
     expect(capability.reasons).toContain('no_main_region');
     expect(capability.counts.headings).toBe(0);
     expect(capability.counts.landmarks).toBe(0);
     expect(capability.counts.buttons).toBe(0);
+
+    // The readability fallback should pick something inside the page
+    // rather than the body root. F3's div with class="content" is the
+    // expected winner — substantial text + matches the positive pattern.
+    expect(pageModel.main_content.tag).not.toBe('body');
+    expect(pageModel.main_content.ref.selector_hints.css).toContain('content');
   });
 });
 

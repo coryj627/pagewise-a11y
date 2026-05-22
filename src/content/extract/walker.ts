@@ -335,6 +335,14 @@ function cssSelectorFor(element: Element): string {
   if (element.id !== '') {
     return `#${cssEscape(element.id)}`;
   }
+  // Prefer a class-based selector when one is available — keeps the
+  // hint short AND surfaces the class to readers like the readability
+  // scorer that look at the selector for content vs chrome signals.
+  const classAttr = element.getAttribute('class') ?? '';
+  const firstClass = classAttr.trim().split(/\s+/).find((c) => c !== '');
+  if (firstClass !== undefined) {
+    return `${element.tagName.toLowerCase()}.${cssEscape(firstClass)}`;
+  }
   const parts: string[] = [];
   let cur: Element | null = element;
   const doc = element.ownerDocument;

@@ -17,6 +17,7 @@ import {
 } from './sensitivity';
 import { pickDeterministicCandidates } from './pre-rank';
 import { detectNoAi } from './noai';
+import { pickReadabilityMain } from './readability';
 
 const LANDMARK_ROLES = new Set([
   'banner',
@@ -61,7 +62,15 @@ export function extractPageModel(
   const all = flatten(root);
 
   const landmarks = all.filter((el) => LANDMARK_ROLES.has(el.role));
-  const main = landmarks.find((el) => el.role === 'main') ?? root;
+  const semanticMain = landmarks.find((el) => el.role === 'main');
+  // When the page has no <main> (and no role="main"), fall back to a
+  // readability-scored content container before giving up and using the
+  // body. The body is rarely a useful "main" for AI orientation; the
+  // readability pick gives Claude a much tighter blob to work with on
+  // div-soup pages. capability.reasons still includes no_main_region
+  // below because the page genuinely lacks the semantic landmark — the
+  // readability pick is a fallback, not a substitute for that signal.
+  const main = semanticMain ?? pickReadabilityMain(root) ?? root;
 
   const forms = all.filter(
     (el) => el.role === 'form' || el.tag === 'form' || el.tag === 'fieldset'
