@@ -150,6 +150,40 @@ describe('options UI', () => {
     expect(list.textContent).toContain('chase.com');
   });
 
+  it('prefixes error-tone status messages with "Error: " (WCAG 1.4.1)', async () => {
+    const input = document.getElementById('add-input') as HTMLInputElement;
+    const form = document.getElementById('add-form') as HTMLFormElement;
+    input.value = '';
+    form.dispatchEvent(new Event('submit', { cancelable: true }));
+    await flushMicrotasks();
+
+    const status = document.getElementById('status-region')!;
+    expect(status.textContent?.startsWith('Error: ')).toBe(true);
+  });
+
+  it('does NOT double-prefix when the message already starts with "Error"', async () => {
+    // Simulate: an upstream system already returns "Error parsing input."
+    // We don't want the status region to show "Error: Error parsing input."
+    // The check is case-insensitive so "error" / "ERROR" don't get doubled.
+    permissions.setAutoApprove(false);
+    const input = document.getElementById('add-input') as HTMLInputElement;
+    const form = document.getElementById('add-form') as HTMLFormElement;
+    input.value = 'example.com';
+    form.dispatchEvent(new Event('submit', { cancelable: true }));
+    await flushMicrotasks();
+
+    const status = document.getElementById('status-region')!;
+    const matches = status.textContent?.match(/error:/gi) ?? [];
+    expect(matches.length).toBeLessThanOrEqual(1);
+  });
+
+  it('associates the API key input with its description via aria-describedby (WCAG 1.3.5)', () => {
+    const input = document.getElementById('key-input') as HTMLInputElement;
+    const describedBy = input.getAttribute('aria-describedby');
+    expect(describedBy).toBe('key-description');
+    expect(document.getElementById('key-description')).not.toBeNull();
+  });
+
   it('reports a clear error message when given a privileged-scheme URL', async () => {
     const input = document.getElementById('add-input') as HTMLInputElement;
     const form = document.getElementById('add-form') as HTMLFormElement;

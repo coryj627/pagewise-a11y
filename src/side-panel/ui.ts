@@ -90,9 +90,15 @@ export function mountSidePanelUi(
     message: string,
     tone: 'ok' | 'error' | 'info' = 'info'
   ): void => {
-    status.textContent = message;
+    // Prefix error messages with "Error: " so the meaning is in text, not
+    // just the red color (WCAG 1.4.1).
+    const prefixed =
+      tone === 'error' && !message.toLowerCase().startsWith('error')
+        ? `Error: ${message}`
+        : message;
+    status.textContent = prefixed;
     status.setAttribute('data-tone', tone);
-    status.setAttribute('data-empty', message === '' ? 'true' : 'false');
+    status.setAttribute('data-empty', prefixed === '' ? 'true' : 'false');
   };
 
   const definitionRow = (term: string, value: string): [HTMLElement, HTMLElement] => {

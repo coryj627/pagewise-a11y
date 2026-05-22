@@ -33,6 +33,42 @@ to Phase 1.
 - **Sanitizer** — HTML and URL sanitizers cover the 8 adversarial
   inputs in [`phase-0-spike.md`](./docs/plans/phase-0-spike.md).
 
+## Accessibility
+
+Pagewise targets **WCAG 2.2 Level AA** conformance for the side panel and
+options page (the only Pagewise surfaces the user interacts with — the
+host page is unchanged). Both surfaces use semantic HTML, an accessible
+keyboard model (Tab / Shift+Tab within regions, F6 / Shift+F6 between
+regions, Enter on a focused radio runs Orientation, Esc closes inline
+prompts), system-pref-driven light/dark themes, and visible
+`:focus-visible` rings that pass 1.4.11 against any background.
+
+Specific conformance notes:
+
+- **1.4.3 / 1.4.11 contrast** — design tokens in `src/styles/tokens.css`
+  meet ≥ 4.5:1 for text and ≥ 3:1 for UI component boundaries +
+  focus rings against the adjacent background in both light and dark.
+- **1.4.1 use of color** — status messages prefix their tone in text
+  ("Error: …"), so meaning isn't conveyed by color alone.
+- **1.3.5 / 3.3.2 form labels** — every input has either a wrapping
+  `<label>`, a `for=` association, or `aria-describedby` pointing at the
+  surrounding help text.
+- **2.3.3 reduced motion** — `prefers-reduced-motion: reduce` collapses
+  every transition / animation duration.
+- **2.4.7 / 2.4.11 focus visible** — focus ring uses an accent token at
+  2px outline + 2px offset so it sits on the page background, not on
+  accent-filled buttons where it would clash.
+- **2.5.8 target size (2.2 AA new)** — buttons and inputs are
+  `min-height: 2.25rem` (36 px), comfortably above the 24×24 minimum.
+- **4.1.3 status messages** — `role="status"` (polite) for routine
+  announcements; the architecture reserves `role="alert"` (assertive)
+  for interrupt-worthy cases only.
+
+Manual verification still required: real-screen-reader announcement
+timing (JAWS / NVDA / VoiceOver), forced-colors-mode rendering, target
+size at high system DPI. The [`ec-checklist.md`](docs/plans/ec-checklist.md)
+EC-2 and EC-6 sections cover this pass.
+
 ## Docs
 
 1. [`docs/plans/architecture.md`](./docs/plans/architecture.md) — canonical

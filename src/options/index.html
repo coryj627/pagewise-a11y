@@ -61,7 +61,7 @@
 
       <section aria-labelledby="key-heading">
         <h2 id="key-heading">Anthropic API key</h2>
-        <p>
+        <p id="key-description">
           Stored locally with restricted access — it is sent only as the
           <code>Authorization</code> header to <code>api.anthropic.com</code>
           when Pagewise makes a request. Pagewise has no server.
@@ -81,6 +81,7 @@
               autocomplete="off"
               spellcheck="false"
               placeholder="sk-ant-…"
+              aria-describedby="key-description"
             />
           </div>
           <div class="actions">
