@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Dashboard — Pagewise fixture F3</title>
+    <style>
+      .heading-1 { font-size: 2rem; font-weight: 700; }
+      .heading-2 { font-size: 1.4rem; font-weight: 600; }
+      .clickable { cursor: pointer; padding: 0.5rem 1rem; border: 1px solid #999; display: inline-block; }
+    </style>
+  </head>
+  <body>
+    <!-- No header, no nav, no main, no footer. Just divs. -->
+    <div class="app">
+      <div class="topbar">
+        <div class="brand">Acme Workflow</div>
+        <div class="links">
+          <span class="clickable">Inbox</span>
+          <span class="clickable">Projects</span>
+          <span class="clickable">Reports</span>
+          <span class="clickable">Settings</span>
+        </div>
+      </div>
+
+      <div class="content">
+        <!-- Fake H1 via font sizing -->
+        <div class="heading-1">Dashboard</div>
+
+        <div class="row">
+          <div class="card">
+            <!-- Fake H2 -->
+            <div class="heading-2">Open issues</div>
+            <div>42</div>
+            <div class="clickable" onclick="alert('details')">View details</div>
+          </div>
+          <div class="card">
+            <div class="heading-2">Pending reviews</div>
+            <div>7</div>
+            <div class="clickable">Open queue</div>
+          </div>
+          <div class="card">
+            <div class="heading-2">Completed today</div>
+            <div>18</div>
+          </div>
+        </div>
+
+        <!-- Status by color only (red = warning). No semantic indication. -->
+        <div style="color: red; padding: 1rem;">Disk usage approaching limit</div>
+
+        <div class="actions">
+          <div class="clickable">New ticket</div>
+          <div class="clickable">Import CSV</div>
+          <div class="clickable" tabindex="0">Refresh</div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

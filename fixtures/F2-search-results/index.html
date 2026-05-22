@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Laptops under $1000 — Search — Pagewise fixture F2</title>
+  </head>
+  <body>
+    <header>
+      <a href="/">Acme Shop</a>
+      <form role="search" aria-label="Site search">
+        <label for="q">Search</label>
+        <input id="q" type="search" value="laptops" />
+        <button type="submit">Search</button>
+      </form>
+      <nav aria-label="Account">
+        <a href="/account">Account</a>
+        <a href="/cart">Cart (0)</a>
+      </nav>
+    </header>
+
+    <main>
+      <h1>Laptops under $1000</h1>
+
+      <p aria-live="polite">
+        Showing 243 results, page 1 of 12. Sorted by price, low to high.
+      </p>
+
+      <aside aria-label="Filters">
+        <h2>Filters</h2>
+        <fieldset>
+          <legend>Brand</legend>
+          <label><input type="checkbox" name="brand" value="acer" checked /> Acer</label>
+          <label><input type="checkbox" name="brand" value="dell" /> Dell</label>
+          <label><input type="checkbox" name="brand" value="hp" /> HP</label>
+          <label><input type="checkbox" name="brand" value="lenovo" checked /> Lenovo</label>
+        </fieldset>
+        <fieldset>
+          <legend>RAM</legend>
+          <label><input type="radio" name="ram" value="8" /> 8 GB</label>
+          <label><input type="radio" name="ram" value="16" checked /> 16 GB</label>
+          <label><input type="radio" name="ram" value="32" /> 32 GB</label>
+        </fieldset>
+        <p>
+          <label for="sort">Sort by</label>
+          <select id="sort">
+            <option>Price, low to high</option>
+            <option>Price, high to low</option>
+            <option>Customer rating</option>
+            <option>Newest</option>
+          </select>
+        </p>
+      </aside>
+
+      <section aria-labelledby="results-heading">
+        <h2 id="results-heading">Results</h2>
+        <ol>
+          <li>
+            <h3><a href="/p/12345001">Acer Aspire 5 — 15.6"</a></h3>
+            <p>16GB RAM · 512GB SSD · $499</p>
+            <p>4.3 stars · 1,204 reviews</p>
+            <button type="button" data-product="12345001">Add to cart</button>
+          </li>
+          <li>
+            <h3><a href="/p/12345002">Lenovo IdeaPad 3 — 14"</a></h3>
+            <p>16GB RAM · 256GB SSD · $549</p>
+            <p>4.4 stars · 2,008 reviews</p>
+            <button type="button" data-product="12345002">Add to cart</button>
+          </li>
+          <li>
+            <h3><a href="/p/12345003">Acer Swift 3 — 14"</a></h3>
+            <p>16GB RAM · 512GB SSD · $629</p>
+            <p>4.6 stars · 887 reviews</p>
+            <button type="button" data-product="12345003">Add to cart</button>
+          </li>
+          <li>
+            <h3><a href="/p/12345004">Lenovo ThinkPad E14</a></h3>
+            <p>16GB RAM · 512GB SSD · $749</p>
+            <p>4.7 stars · 3,142 reviews</p>
+            <button type="button" data-product="12345004">Add to cart</button>
+          </li>
+          <li>
+            <h3><a href="/p/12345005">Acer Aspire 7 Gaming</a></h3>
+            <p>16GB RAM · 1TB SSD · $899</p>
+            <p>4.2 stars · 502 reviews</p>
+            <button type="button" data-product="12345005">Add to cart</button>
+          </li>
+        </ol>
+      </section>
+
+      <nav aria-label="Pagination">
+        <a href="/search?p=1" aria-current="page">1</a>
+        <a href="/search?p=2">2</a>
+        <a href="/search?p=3">3</a>
+        <a href="/search?p=4">4</a>
+        <span>…</span>
+        <a href="/search?p=12">12</a>
+        <a href="/search?p=2" rel="next">Next</a>
+      </nav>
+    </main>
+
+    <footer>
+      <p>© 2026 Acme Shop</p>
+    </footer>
+  </body>
+</html>

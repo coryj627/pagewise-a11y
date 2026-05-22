@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Checkout · Step 2 of 3 — Pagewise fixture F4</title>
+  </head>
+  <body>
+    <header>
+      <a href="/">Acme Shop</a>
+      <nav aria-label="Checkout progress">
+        <ol>
+          <li>Cart</li>
+          <li aria-current="step">Payment</li>
+          <li>Review</li>
+        </ol>
+      </nav>
+    </header>
+
+    <main>
+      <h1>Payment details</h1>
+      <p>Step 2 of 3 · You will not be charged until you review your order.</p>
+
+      <form aria-labelledby="form-heading">
+        <h2 id="form-heading">Card information</h2>
+
+        <fieldset>
+          <legend>Account</legend>
+          <div>
+            <label for="email">Email</label>
+            <input id="email" name="email" type="email" autocomplete="email" required />
+          </div>
+          <div>
+            <label for="phone">Phone</label>
+            <input id="phone" name="phone" type="tel" autocomplete="tel" />
+          </div>
+          <div>
+            <label for="password">Account password</label>
+            <input id="password" name="password" type="password" autocomplete="current-password" required />
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Payment card</legend>
+          <div>
+            <label for="ccname">Cardholder name</label>
+            <input id="ccname" name="ccname" autocomplete="cc-name" required />
+          </div>
+          <div>
+            <label for="ccnumber">Card number</label>
+            <input id="ccnumber" name="ccnumber" autocomplete="cc-number" inputmode="numeric" required />
+          </div>
+          <div>
+            <label for="ccexp">Expires (MM/YY)</label>
+            <input id="ccexp" name="ccexp" autocomplete="cc-exp" required />
+          </div>
+          <div>
+            <label for="cccsc">Security code</label>
+            <input id="cccsc" name="cccsc" autocomplete="cc-csc" inputmode="numeric" required />
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Billing address</legend>
+          <div>
+            <label for="addr">Street address</label>
+            <input id="addr" name="address" autocomplete="street-address" required />
+          </div>
+          <div>
+            <label for="zip">Postal code</label>
+            <input id="zip" name="zip" autocomplete="postal-code" required />
+          </div>
+          <div>
+            <label for="country">Country</label>
+            <input id="country" name="country" autocomplete="country" required />
+          </div>
+        </fieldset>
+
+        <div role="alert" aria-live="assertive">
+          <strong>Error:</strong> Card number didn't match the issuer.
+        </div>
+
+        <div>
+          <button type="button">Back to cart</button>
+          <button type="submit">Continue to review</button>
+        </div>
+      </form>
+    </main>
+
+    <footer>
+      <p>© 2026 Acme Shop</p>
+    </footer>
+  </body>
+</html>
