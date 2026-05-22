@@ -3,9 +3,10 @@
 A Chrome / Edge extension that gives blind users a faster, structured way
 to understand any web page, powered by the Claude API.
 
-**Status:** Phase 0 spike code-complete. Manual screen-reader pass per
-[`docs/plans/ec-checklist.md`](./docs/plans/ec-checklist.md) is the gate
-to Phase 1.
+**Status:** Phase 0 complete — manual screen-reader pass per
+[`docs/plans/ec-checklist.md`](./docs/plans/ec-checklist.md) succeeded.
+See [`docs/plans/phase-0-notes-run.md`](./docs/plans/phase-0-notes-run.md)
+for the run notes. Phase 1 work is in progress.
 
 ## What's wired
 
