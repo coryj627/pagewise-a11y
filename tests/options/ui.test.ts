@@ -10,6 +10,7 @@ import { ApiKeyStore } from '@/shared/api-key';
 import { DisclosurePreference } from '@/shared/disclosure';
 import { OnboardingPreference } from '@/shared/onboarding';
 import { DebugLog } from '@/shared/debug-log';
+import { MemoryShortcutQuery, type Platform } from '@/shared/shortcuts';
 
 // Vitest is started from the repo root, so a cwd-relative path is stable.
 const HTML_PATH = resolve(process.cwd(), 'src/options/index.html');
@@ -41,6 +42,22 @@ describe('options UI', () => {
   let debugLog: DebugLog;
   let debugSession: MemoryStorageBackend;
   let debugEnabledStore: MemoryStorageBackend;
+  let shortcuts: MemoryShortcutQuery;
+
+  /** Mount with the current test-scoped services. Wrapped because the
+   *  service object is verbose and several tests re-mount mid-test. */
+  function mount(platform: Platform = 'other'): void {
+    mountOptionsUi(document, {
+      domains: store,
+      ledger,
+      apiKey,
+      disclosure,
+      onboarding,
+      debugLog,
+      shortcuts,
+      platform,
+    });
+  }
 
   beforeEach(async () => {
     document.body.innerHTML = bodyFromOptionsHtml();
@@ -56,14 +73,8 @@ describe('options UI', () => {
     debugSession = new MemoryStorageBackend();
     debugEnabledStore = new MemoryStorageBackend();
     debugLog = new DebugLog(debugSession, debugEnabledStore);
-    mountOptionsUi(document, {
-      domains: store,
-      ledger,
-      apiKey,
-      disclosure,
-      onboarding,
-      debugLog,
-    });
+    shortcuts = new MemoryShortcutQuery();
+    mount();
     await flushMicrotasks();
   });
 
@@ -238,17 +249,65 @@ describe('options UI', () => {
     await apiKey.set('sk-ant-x');
     await store.enable('example.com');
     document.body.innerHTML = bodyFromOptionsHtml();
-    mountOptionsUi(document, {
-      domains: store,
-      ledger,
-      apiKey,
-      disclosure,
-      onboarding,
-      debugLog,
-    });
+    mount();
     await flushMicrotasks();
 
     expect(document.getElementById('welcome')?.hasAttribute('hidden')).toBe(true);
+  });
+
+  it('renders the welcome keystroke with word labels on non-Mac platforms', async () => {
+    // Default mount in beforeEach uses platform: 'other'.
+    const slot = document.getElementById('welcome-keystroke')!;
+    const labels = Array.from(slot.querySelectorAll('kbd')).map(
+      (k) => k.textContent ?? ''
+    );
+    expect(labels).toEqual(['Alt', 'Shift', 'P']);
+    // Word-form labels are joined by '+'; the text content includes the
+    // joiners so screen readers announce the chord, not three loose keys.
+    expect(slot.textContent).toContain('Alt+Shift+P');
+    expect(slot.textContent?.startsWith('press ')).toBe(true);
+  });
+
+  it('renders the welcome keystroke as Mac glyphs on macOS', async () => {
+    document.body.innerHTML = bodyFromOptionsHtml();
+    mount('mac');
+    await flushMicrotasks();
+    const slot = document.getElementById('welcome-keystroke')!;
+    const labels = Array.from(slot.querySelectorAll('kbd')).map(
+      (k) => k.textContent ?? ''
+    );
+    expect(labels).toEqual(['⌥', '⇧', 'P']);
+    // Mac glyphs render flush against each other — no '+' joiners — to
+    // match the system convention (⌥⇧P, not ⌥+⇧+P).
+    expect(slot.textContent).not.toContain('+');
+  });
+
+  it('reflects a user-rebound shortcut from the live commands API', async () => {
+    shortcuts.setShortcut('Ctrl+Shift+F5');
+    document.body.innerHTML = bodyFromOptionsHtml();
+    mount('other');
+    await flushMicrotasks();
+    const slot = document.getElementById('welcome-keystroke')!;
+    const labels = Array.from(slot.querySelectorAll('kbd')).map(
+      (k) => k.textContent ?? ''
+    );
+    expect(labels).toEqual(['Ctrl', 'Shift', 'F5']);
+  });
+
+  it('points unbound users at chrome://extensions/shortcuts', async () => {
+    shortcuts.setShortcut(null);
+    document.body.innerHTML = bodyFromOptionsHtml();
+    mount('mac');
+    await flushMicrotasks();
+    const slot = document.getElementById('welcome-keystroke')!;
+    expect(slot.textContent).toContain('chrome://extensions/shortcuts');
+    expect(slot.textContent).toContain('assign');
+    // The slot must still mark the URL as something to type (kbd), not a
+    // link — extension pages cannot open chrome:// targets via <a href>.
+    expect(slot.querySelector('a')).toBeNull();
+    expect(slot.querySelector('kbd')?.textContent).toBe(
+      'chrome://extensions/shortcuts'
+    );
   });
 
   it('persists Dismiss across remounts', async () => {
@@ -260,14 +319,7 @@ describe('options UI', () => {
     expect(await onboarding.isDismissed()).toBe(true);
 
     document.body.innerHTML = bodyFromOptionsHtml();
-    mountOptionsUi(document, {
-      domains: store,
-      ledger,
-      apiKey,
-      disclosure,
-      onboarding,
-      debugLog,
-    });
+    mount();
     await flushMicrotasks();
     expect(document.getElementById('welcome')?.hasAttribute('hidden')).toBe(true);
   });
@@ -295,14 +347,7 @@ describe('options UI', () => {
     await debugLog.setEnabled(true);
     await debugLog.error('whatever broke');
     document.body.innerHTML = bodyFromOptionsHtml();
-    mountOptionsUi(document, {
-      domains: store,
-      ledger,
-      apiKey,
-      disclosure,
-      onboarding,
-      debugLog,
-    });
+    mount();
     await flushMicrotasks();
     expect(document.getElementById('debug-status')?.textContent).toContain('1');
 
@@ -340,14 +385,7 @@ describe('options UI', () => {
   it('removes a domain via its Remove button', async () => {
     await store.enable('example.com');
     document.body.innerHTML = bodyFromOptionsHtml();
-    mountOptionsUi(document, {
-      domains: store,
-      ledger,
-      apiKey,
-      disclosure,
-      onboarding,
-      debugLog,
-    });
+    mount();
     await flushMicrotasks();
 
     const removeBtn = document.querySelector(
@@ -393,14 +431,7 @@ describe('options UI', () => {
     });
     // Re-mount so the summary reads the seeded ledger.
     document.body.innerHTML = bodyFromOptionsHtml();
-    mountOptionsUi(document, {
-      domains: store,
-      ledger,
-      apiKey,
-      disclosure,
-      onboarding,
-      debugLog,
-    });
+    mount();
     await flushMicrotasks();
 
     const today = document.getElementById('usage-today')!.textContent ?? '';
@@ -430,14 +461,7 @@ describe('options UI', () => {
   it('clears the API key via the Clear button', async () => {
     await apiKey.set('sk-ant-stored');
     document.body.innerHTML = bodyFromOptionsHtml();
-    mountOptionsUi(document, {
-      domains: store,
-      ledger,
-      apiKey,
-      disclosure,
-      onboarding,
-      debugLog,
-    });
+    mount();
     await flushMicrotasks();
 
     const clearBtn = document.getElementById('key-clear') as HTMLButtonElement;
@@ -452,14 +476,7 @@ describe('options UI', () => {
   it('saving empty input clears the key', async () => {
     await apiKey.set('sk-ant-existing');
     document.body.innerHTML = bodyFromOptionsHtml();
-    mountOptionsUi(document, {
-      domains: store,
-      ledger,
-      apiKey,
-      disclosure,
-      onboarding,
-      debugLog,
-    });
+    mount();
     await flushMicrotasks();
 
     const input = document.getElementById('key-input') as HTMLInputElement;
@@ -502,14 +519,7 @@ describe('options UI', () => {
   it('shows the disabled message once auto counter is exhausted', async () => {
     for (let i = 0; i < 5; i++) await disclosure.recordConfirmation();
     document.body.innerHTML = bodyFromOptionsHtml();
-    mountOptionsUi(document, {
-      domains: store,
-      ledger,
-      apiKey,
-      disclosure,
-      onboarding,
-      debugLog,
-    });
+    mount();
     await flushMicrotasks();
     const text = document.getElementById('disclosure-counter')!.textContent ?? '';
     expect(text).toContain('disabled');
@@ -523,14 +533,7 @@ describe('options UI', () => {
       cost_usd: 0.01,
     });
     document.body.innerHTML = bodyFromOptionsHtml();
-    mountOptionsUi(document, {
-      domains: store,
-      ledger,
-      apiKey,
-      disclosure,
-      onboarding,
-      debugLog,
-    });
+    mount();
     await flushMicrotasks();
 
     const clearBtn = document.getElementById('clear-ledger') as HTMLButtonElement;
