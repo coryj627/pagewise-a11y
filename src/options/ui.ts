@@ -13,6 +13,11 @@ import {
 import type { OnboardingPreference } from '@/shared/onboarding';
 import type { DebugLog } from '@/shared/debug-log';
 import { formatCostUsd } from '@/shared/pricing';
+import {
+  type Platform,
+  type ShortcutQuery,
+  formatKeystrokeKeys,
+} from '@/shared/shortcuts';
 
 export interface OptionsServices {
   domains: DomainStore;
@@ -21,6 +26,10 @@ export interface OptionsServices {
   disclosure: DisclosurePreference;
   onboarding: OnboardingPreference;
   debugLog: DebugLog;
+  shortcuts: ShortcutQuery;
+  /** Pre-detected at the call site so tests can override without mucking
+   *  with `navigator`. */
+  platform: Platform;
 }
 
 /**
@@ -38,6 +47,8 @@ export function mountOptionsUi(
   const disclosure = services.disclosure;
   const onboarding = services.onboarding;
   const debugLog = services.debugLog;
+  const shortcuts = services.shortcuts;
+  const platform = services.platform;
   const $ = <T extends Element = HTMLElement>(sel: string): T => {
     const el = root.querySelector(sel);
     if (el === null) throw new Error(`mountOptionsUi: missing element ${sel}`);
@@ -354,7 +365,41 @@ export function mountOptionsUi(
     welcomeStepKey.querySelector<HTMLElement>('.welcome-status')!;
   const welcomeStepDomainStatus =
     welcomeStepDomain.querySelector<HTMLElement>('.welcome-status')!;
+  const welcomeKeystroke = $('#welcome-keystroke');
   const welcomeDismiss = $<HTMLButtonElement>('#welcome-dismiss');
+
+  /** Replace the keystroke slot with either a `press <kbd>…</kbd>+<kbd>…</kbd>`
+   *  fragment (when bound) or an instruction pointing the user at
+   *  `chrome://extensions/shortcuts` (when the user has cleared it).
+   *  Rebuilt rather than mutated so we never have to reason about stale
+   *  children from a prior render. */
+  const renderKeystroke = (shortcut: string | null): void => {
+    welcomeKeystroke.replaceChildren();
+    if (shortcut === null) {
+      // We cannot make a clickable link to chrome:// from an extension
+      // page — the user has to type it. Wrap the URL in <kbd> so screen
+      // readers announce it as something to enter, not navigate to.
+      welcomeKeystroke.append(
+        document.createTextNode('assign a shortcut at '),
+      );
+      const url = document.createElement('kbd');
+      url.textContent = 'chrome://extensions/shortcuts';
+      welcomeKeystroke.append(url);
+      return;
+    }
+    const keys = formatKeystrokeKeys(shortcut, platform);
+    welcomeKeystroke.append(document.createTextNode('press '));
+    keys.forEach((key, index) => {
+      const kbd = document.createElement('kbd');
+      kbd.textContent = key;
+      welcomeKeystroke.append(kbd);
+      // Plus signs only make sense between word-form labels; Mac glyphs
+      // sit flush against each other (⌥⇧P), matching system convention.
+      if (index < keys.length - 1 && platform !== 'mac') {
+        welcomeKeystroke.append(document.createTextNode('+'));
+      }
+    });
+  };
 
   renderWelcome = async (): Promise<void> => {
     const dismissed = await onboarding.isDismissed();
@@ -362,11 +407,13 @@ export function mountOptionsUi(
     const domains = await store.getEnabledDomains();
     const domainEnabled = domains.length > 0;
     const allComplete = keySet && domainEnabled;
+    const shortcut = await shortcuts.getActionShortcut();
 
     welcomeStepKey.setAttribute('data-complete', String(keySet));
     welcomeStepDomain.setAttribute('data-complete', String(domainEnabled));
     welcomeStepKeyStatus.textContent = keySet ? 'Done' : '';
     welcomeStepDomainStatus.textContent = domainEnabled ? 'Done' : '';
+    renderKeystroke(shortcut);
 
     if (dismissed || allComplete) {
       welcome.setAttribute('hidden', '');
